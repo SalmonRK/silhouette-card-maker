@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SCM Studio</title>
+<link rel="icon" href="static/assets/logo.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bai+Jamjuree:wght@500;600;700&family=IBM+Plex+Sans+Thai:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="static/app.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="./" aria-label="SCM Studio">
+    <img src="static/assets/logo.svg" alt="" width="28" height="28">
+    <span>SCM Studio</span>
+  </a>
+  <nav class="ws" aria-label="Workspaces">
+    <button type="button" data-ws="import"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3M7 10l5 5 5-5M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/></svg><span data-i18n="ws.import"></span></button>
+    <button type="button" data-ws="create"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4 8.12 15.88M14.47 14.48 20 20M8.12 8.12 12 12"/></svg><span data-i18n="ws.create"></span><b class="ws-badge" data-bind="cardsCount"></b></button>
+    <button type="button" data-ws="machine"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg><span data-i18n="ws.machine"></span></button>
+  </nav>
+  <div class="lang" role="group" aria-label="Language">
+    <button type="button" data-lang="th" aria-pressed="true">ไทย</button>
+    <button type="button" data-lang="en" aria-pressed="false">EN</button>
+  </div>
+</header>
+
+<!-- ============================================================ B. make sheets (creator wizard) -->
+<div class="subbar" data-ws-pane="create">
+  <nav class="steps" aria-label="Steps">
+    <ol>
+      <li><button type="button" data-step="cards"><b>1</b><span data-i18n="step.cards"></span><small data-bind="cardsCountStep"></small></button></li>
+      <li><button type="button" data-step="layout"><b>2</b><span data-i18n="step.layout"></span><small data-bind="layoutName"></small></button></li>
+      <li><button type="button" data-step="make"><b>3</b><span data-i18n="step.make"></span><small data-bind="makeState"></small></button></li>
+      <li><button type="button" data-step="cut"><b>4</b><span data-i18n="step.cut"></span></button></li>
+    </ol>
+  </nav>
+</div>
+
+<div class="shell" data-ws-pane="create">
+  <main class="stage" aria-label="Sheet preview">
+    <div class="mat" id="mat">
+      <svg id="sheet" role="img" aria-labelledby="sheetTitle"><title id="sheetTitle">Sheet preview</title></svg>
+      <p class="stage-empty" id="stageEmpty" data-i18n="stage.empty" hidden></p>
+    </div>
+    <div class="stage-meta" id="stageMeta" aria-live="polite"></div>
+    <div class="pager" id="pager" hidden>
+      <button type="button" id="prevSheet" data-i18n-aria="prevSheet">‹</button>
+      <span id="sheetNo"></span>
+      <button type="button" id="nextSheet" data-i18n-aria="nextSheet">›</button>
+    </div>
+  </main>
+
+  <section class="panel" aria-live="polite">
+    <!-- 1 cards -->
+    <div class="pane" data-pane="cards">
+      <h2 data-i18n="cards.title"></h2>
+      <p class="lead" data-i18n="cards.lead"></p>
+      <label class="drop" id="dropFront">
+        <input type="file" id="fileFront" accept="image/*" multiple hidden>
+        <strong data-i18n="cards.drop"></strong>
+        <span data-i18n="cards.dropHint"></span>
+      </label>
+      <div class="row">
+        <button type="button" class="btn ghost" id="useSample" data-i18n="cards.sample"></button>
+        <button type="button" class="btn ghost" id="toImport" data-i18n="ws.import"></button>
+        <button type="button" class="btn ghost danger" id="clearAll" data-i18n="cards.clear" hidden></button>
+      </div>
+
+      <h3 data-i18n="cards.backTitle"></h3>
+      <div class="back-slot">
+        <label class="thumb back" id="backSlot">
+          <input type="file" id="fileBack" accept="image/*" hidden>
+          <img id="backImg" alt="" hidden>
+          <span id="backEmpty" data-i18n="cards.backEmpty"></span>
+        </label>
+        <p class="hint" data-i18n="cards.backHint"></p>
+      </div>
+      <label class="check"><input type="checkbox" id="onlyFronts"> <span data-i18n="cards.onlyFronts"></span></label>
+
+      <h3><span data-i18n="cards.listTitle"></span> <small id="frontCount"></small></h3>
+      <p class="hint" data-i18n="cards.dsHint"></p>
+      <ul class="cards" id="cardList"></ul>
+    </div>
+
+    <!-- 2 layout -->
+    <div class="pane" data-pane="layout" hidden>
+      <h2 data-i18n="layout.title"></h2>
+      <div class="field">
+        <label for="paper" data-i18n="layout.paper"></label>
+        <select id="paper"></select>
+      </div>
+      <div class="field">
+        <label for="card" data-i18n="layout.card"></label>
+        <select id="card"></select>
+      </div>
+      <label class="check"><input type="checkbox" id="borderless"> <span data-i18n="layout.borderless"></span></label>
+      <p class="hint" data-i18n="layout.borderlessHint"></p>
+      <div class="field">
+        <label for="registration" data-i18n="layout.marks"></label>
+        <select id="registration">
+          <option value="3" data-i18n="layout.marks3"></option>
+          <option value="4" data-i18n="layout.marks4"></option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="fit" data-i18n="layout.fit"></label>
+        <select id="fit">
+          <option value="stretch" data-i18n="layout.fitStretch"></option>
+          <option value="crop" data-i18n="layout.fitCrop"></option>
+        </select>
+      </div>
+      <details class="more">
+        <summary data-i18n="layout.more"></summary>
+        <div class="field">
+          <label for="extendBleed" data-i18n="layout.extendBleed"></label>
+          <input id="extendBleed" placeholder="0.5mm" inputmode="decimal">
+          <p class="hint" data-i18n="layout.extendBleedHint"></p>
+        </div>
+        <div class="field">
+          <label for="crop" data-i18n="layout.crop"></label>
+          <input id="crop" placeholder="3mm" inputmode="decimal">
+          <p class="hint" data-i18n="layout.cropHint"></p>
+        </div>
+        <div class="field">
+          <label for="specialty" data-i18n="layout.specialty"></label>
+          <select id="specialty"><option value="" data-i18n="layout.none"></option></select>
+        </div>
+      </details>
+      <dl class="facts" id="layoutFacts"></dl>
+      <p class="warn" id="layoutError" hidden></p>
+    </div>
+
+    <!-- 3 make -->
+    <div class="pane" data-pane="make" hidden>
+      <h2 data-i18n="make.title"></h2>
+      <p class="lead" data-i18n="make.lead"></p>
+      <div class="field">
+        <label for="label" data-i18n="make.label"></label>
+        <input id="label" maxlength="60">
+      </div>
+      <label class="check"><input type="checkbox" id="showOutline"> <span data-i18n="make.outline"></span></label>
+      <label class="check"><input type="checkbox" id="useOffset" checked> <span data-i18n="make.useOffset"></span> <small id="offsetNow"></small></label>
+      <button type="button" class="btn primary" id="generate" data-i18n="make.go"></button>
+      <p class="status" id="makeStatus" role="status"></p>
+      <ul class="downloads" id="pdfActions" hidden>
+        <li>
+          <a class="btn" id="downloadPdf" download data-i18n="make.download"></a>
+          <a class="btn ghost" id="openPdf" target="_blank" rel="noopener" data-i18n="make.open"></a>
+          <p class="hint" id="pdfInfo"></p>
+        </li>
+        <li>
+          <a class="btn" id="downloadPng" download data-i18n="make.png"></a>
+          <p class="hint" id="pngInfo"></p>
+        </li>
+        <li>
+          <a class="btn" id="downloadStudio" download data-i18n="make.studio"></a>
+          <p class="hint" id="studioInfo"></p>
+        </li>
+      </ul>
+      <div class="pages" id="pages"></div>
+      <details class="log" id="logBox" hidden><summary data-i18n="make.log"></summary><pre id="log"></pre></details>
+    </div>
+
+    <!-- 4 print & cut -->
+    <div class="pane" data-pane="cut" hidden>
+      <h2 data-i18n="cut.title"></h2>
+      <div class="seg" role="radiogroup" aria-labelledby="routeLabel">
+        <span id="routeLabel" class="seg-label" data-i18n="route.label"></span>
+        <label><input type="radio" name="route" value="pdf" checked> <span data-i18n="route.pdf"></span></label>
+        <label><input type="radio" name="route" value="studio"> <span data-i18n="route.studio"></span></label>
+      </div>
+      <p class="hint" id="routeHint"></p>
+      <ol class="checklist">
+        <li data-route="pdf">
+          <strong data-i18n="cut.t1"></strong>
+          <p data-i18n="cut.d1"></p>
+          <a class="btn" id="downloadTpl" download data-i18n="cut.tpl"></a>
+          <p class="warn" id="tplMissing" data-i18n="cut.tplMissing" hidden></p>
+        </li>
+        <li data-route="pdf"><strong data-i18n="cut.t2"></strong><p data-i18n="cut.d2"></p>
+          <button type="button" class="linkish" data-goto="machine" data-i18n="cut.marksLink"></button>
+        </li>
+        <li data-route="studio">
+          <strong data-i18n="cutS.t1"></strong>
+          <p data-i18n="cutS.d1"></p>
+          <a class="btn" id="downloadStudio2" download data-i18n="make.studio"></a>
+          <p class="warn" id="studioMissing" data-i18n="cutS.missing" hidden></p>
+        </li>
+        <li data-route="studio"><strong data-i18n="cutS.t2"></strong><p id="placeText"></p></li>
+        <li data-route="studio"><strong data-i18n="cutS.t3"></strong><p data-i18n="cutS.d3"></p></li>
+        <li><strong data-i18n="cut.t3"></strong><p id="measureText"></p></li>
+        <li><strong data-i18n="cut.t4"></strong><p data-i18n="cut.d4"></p><p class="warn" id="borderlessMat" data-i18n="cut.borderlessMat" hidden></p></li>
+        <li><strong data-i18n="cut.t5"></strong><p data-i18n="cut.d5"></p>
+          <table class="blades">
+            <thead><tr><th data-i18n="cut.material"></th><th>Blade</th><th>Force</th><th>Speed</th><th data-i18n="cut.passes"></th></tr></thead>
+            <tbody>
+              <tr><td data-i18n="cut.m180"></td><td>4</td><td>20</td><td>4</td><td>1</td></tr>
+              <tr><td data-i18n="cut.mLam"></td><td>8–10</td><td>33–35</td><td>5</td><td>4–6</td></tr>
+            </tbody>
+          </table>
+          <p class="hint" data-i18n="cut.bladeHint"></p>
+        </li>
+        <li><strong data-i18n="cut.t6"></strong><p data-i18n="cut.d6"></p></li>
+      </ol>
+    </div>
+  </section>
+</div>
+
+<!-- ============================================================ A. deck import (plugins/, with history) -->
+<div class="imp" data-ws-pane="import" hidden>
+  <main class="imp-stage">
+    <div class="imp-head">
+      <div class="tabs" role="tablist">
+        <button type="button" role="tab" data-view="pick" data-i18n="imp.pick"></button>
+        <button type="button" role="tab" data-view="history"><span data-i18n="imp.history"></span> <small id="histCount"></small></button>
+        <button type="button" role="tab" data-view="deck" id="resultTab" hidden data-i18n="imp.result"></button>
+      </div>
+      <input type="search" id="gameSearch" class="search" data-i18n-ph="imp.search">
+    </div>
+    <div id="view-pick" class="games" role="radiogroup" aria-label="Games"></div>
+    <div id="view-history" class="history" hidden></div>
+    <div id="view-deck" hidden>
+      <div class="fetched" id="deckGrid"></div>
+      <details class="warnbox" id="warnBox" hidden><summary data-i18n="imp.warnTitle"></summary><ul id="warnList"></ul></details>
+    </div>
+    <p class="legal" data-i18n="import.legal"></p>
+  </main>
+
+  <aside class="panel imp-panel">
+    <div class="pane" id="impForm">
+      <h2 data-i18n="ws.import"></h2>
+      <p class="lead" data-i18n="imp.lead"></p>
+      <div class="game-head" id="gameHead"></div>
+      <div class="field">
+        <label for="impFormat" data-i18n="import.format"></label>
+        <select id="impFormat"></select>
+      </div>
+      <div class="field">
+        <label for="impDeck" data-i18n="import.deck"></label>
+        <textarea id="impDeck" rows="9" spellcheck="false"></textarea>
+        <p class="hint" data-i18n="import.deckHint"></p>
+      </div>
+      <details class="more" id="impOptBox">
+        <summary data-i18n="imp.options"></summary>
+        <div id="impOptions"></div>
+      </details>
+      <p class="estimate" id="impEstimate"></p>
+      <button type="button" class="btn primary" id="impRun" data-i18n="import.run"></button>
+      <p class="hint center" data-i18n="imp.runNote"></p>
+    </div>
+
+    <div class="pane" id="impResult" hidden>
+      <h2 id="resTitle"></h2>
+      <p class="lead" id="resSub"></p>
+      <div class="prog" id="resProg"><i></i></div>
+      <div class="stats">
+        <div><b id="stCards">0</b><span data-i18n="imp.statCards"></span></div>
+        <div><b id="stKinds">0</b><span data-i18n="imp.statKinds"></span></div>
+        <div><b id="stDs" class="ds">0</b><span data-i18n="imp.statDs"></span></div>
+        <div><b id="stWarn" class="wn">0</b><span data-i18n="imp.statWarn"></span></div>
+      </div>
+      <h3 data-i18n="imp.useTitle"></h3>
+      <div class="radios" role="radiogroup">
+        <label class="radio"><input type="radio" name="useMode" value="append" checked><span><b data-i18n="imp.append"></b><small id="appendHint"></small></span></label>
+        <label class="radio"><input type="radio" name="useMode" value="replace"><span><b data-i18n="imp.replace"></b><small data-i18n="imp.replaceHint"></small></span></label>
+      </div>
+      <details class="log" id="impLogBox"><summary data-i18n="imp.log"></summary><pre id="impLog"></pre></details>
+      <div class="row">
+        <button type="button" class="btn ghost" id="impEdit" data-i18n="imp.edit"></button>
+        <button type="button" class="btn ghost danger" id="impCancel" data-i18n="import.cancel" hidden></button>
+      </div>
+      <button type="button" class="btn primary" id="impUse" data-i18n="imp.use"></button>
+    </div>
+  </aside>
+</div>
+
+<!-- ============================================================ C. machine setup -->
+<div class="machine" data-ws-pane="machine" hidden>
+  <div class="mach-grid">
+    <section class="tool" id="toolCal">
+      <h2 data-i18n="cal.title"></h2>
+      <p class="hint" data-i18n="cal.lead"></p>
+      <a class="btn ghost" id="downloadCal" download data-i18n="cal.download"></a>
+      <div class="offset">
+        <div class="field"><label for="offX">X (px)</label><input id="offX" type="number" step="1" value="0"></div>
+        <div class="field"><label for="offY">Y (px)</label><input id="offY" type="number" step="1" value="0"></div>
+        <div class="field"><label for="offA" data-i18n="cal.angle"></label><input id="offA" type="number" step="0.05" value="0"></div>
+      </div>
+      <label class="check"><input type="checkbox" id="offEnabled"> <span data-i18n="cal.enabled"></span></label>
+      <button type="button" class="btn" id="saveOffset" data-i18n="cal.save"></button>
+      <p class="status" id="offStatus" role="status"></p>
+    </section>
+
+    <section class="tool" id="toolTpl">
+      <h2 data-i18n="mach.tplTitle"></h2>
+      <p class="hint" data-i18n="mach.tplLead"></p>
+      <div class="field"><label for="tplPaper" data-i18n="layout.paper"></label><select id="tplPaper"></select></div>
+      <ul class="tpl-list" id="tplList"></ul>
+    </section>
+
+    <section class="tool" id="toolMarks">
+      <h2 data-i18n="mach.marksTitle"></h2>
+      <p class="hint" data-i18n="marks.lead"></p>
+      <a class="btn ghost" id="downloadMarks" download data-i18n="marks.download"></a>
+      <p class="hint" id="marksInfo"></p>
+    </section>
+
+    <section class="tool" id="toolBlades">
+      <h2 data-i18n="mach.bladesTitle"></h2>
+      <table class="blades">
+        <thead><tr><th data-i18n="cut.material"></th><th>Blade</th><th>Force</th><th>Speed</th><th data-i18n="cut.passes"></th></tr></thead>
+        <tbody>
+          <tr><td data-i18n="cut.m180"></td><td>4</td><td>20</td><td>4</td><td>1</td></tr>
+          <tr><td data-i18n="cut.mLam"></td><td>8–10</td><td>33–35</td><td>5</td><td>4–6</td></tr>
+        </tbody>
+      </table>
+      <p class="hint" data-i18n="cut.bladeHint"></p>
+    </section>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="alert" hidden></div>
+<script src="static/i18n.js"></script>
+<script src="static/app.js"></script>
+</body>
+</html>

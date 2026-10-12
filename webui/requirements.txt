@@ -1,0 +1,2 @@
+# on top of the repo's requirements.txt
+flask>=3.0
