@@ -513,7 +513,7 @@ input.switch:disabled { opacity: .45; cursor: not-allowed; }
 .routes { margin-top: 6px; }
 .route { position: relative; display: flex; flex-direction: column; overflow: hidden; border: 1.5px solid var(--rule); border-radius: var(--radius-l); background: var(--panel); cursor: pointer; }
 .route input { position: absolute; opacity: 0; pointer-events: none; }
-.route img { width: 100%; height: 74px; object-fit: cover; display: block; }
+.route img { width: 100%; height: 96px; object-fit: cover; object-position: center 42%; display: block; }
 .route .tx { padding: 8px 12px 10px; display: flex; flex-direction: column; }
 .route .t { display: flex; align-items: center; gap: 6px; font: 600 14.5px/1.3 var(--display); }
 .route .t .ico { width: 18px; height: 18px; }
