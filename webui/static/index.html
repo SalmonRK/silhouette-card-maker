@@ -60,60 +60,114 @@
       <p class="lead" data-i18n="cards.lead"></p>
       <label class="drop" id="dropFront">
         <input type="file" id="fileFront" accept="image/*" multiple hidden>
+        <span class="drop-ic"><i data-icon="image-plus"></i></span>
         <strong data-i18n="cards.drop"></strong>
         <span data-i18n="cards.dropHint"></span>
       </label>
-      <div class="row">
-        <button type="button" class="btn ghost" id="useSample" data-i18n="cards.sample"></button>
-        <button type="button" class="btn ghost" id="toImport" data-i18n="ws.import"></button>
-        <button type="button" class="btn ghost danger" id="clearAll" data-i18n="cards.clear" hidden></button>
+      <div class="grid g2 btn-pair">
+        <button type="button" class="btn ghost" id="useSample"><i data-icon="sparkles"></i><span data-i18n="cards.sample"></span></button>
+        <button type="button" class="btn ghost" id="toImport"><i data-icon="download"></i><span data-i18n="ws.import"></span></button>
       </div>
 
-      <h3 data-i18n="cards.backTitle"></h3>
-      <div class="back-slot">
-        <label class="thumb back" id="backSlot">
-          <input type="file" id="fileBack" accept="image/*" hidden>
-          <img id="backImg" alt="" hidden>
-          <span id="backEmpty" data-i18n="cards.backEmpty"></span>
-        </label>
-        <p class="hint" data-i18n="cards.backHint"></p>
-      </div>
-      <label class="check"><input type="checkbox" id="onlyFronts"> <span data-i18n="cards.onlyFronts"></span></label>
+      <section class="sec">
+        <div class="sec-h"><h3 data-i18n="cards.backTitle"></h3><small data-i18n="cards.backShared"></small></div>
+        <div class="back-box">
+          <label class="thumb back" id="backSlot">
+            <input type="file" id="fileBack" accept="image/*" hidden>
+            <img id="backImg" alt="" hidden>
+            <span id="backEmpty"><i data-icon="plus"></i></span>
+          </label>
+          <span class="tx"><span class="t" id="backName"></span><span class="s" data-i18n="cards.backHint"></span></span>
+          <label class="btn sm ghost" for="fileBack" data-i18n="cards.change"></label>
+        </div>
+        <label class="switch-line"><span data-i18n="cards.onlyFronts"></span><input type="checkbox" id="onlyFronts" role="switch" class="switch"></label>
+      </section>
 
-      <h3><span data-i18n="cards.listTitle"></span> <small id="frontCount"></small></h3>
-      <p class="hint" data-i18n="cards.dsHint"></p>
-      <ul class="cards" id="cardList"></ul>
+      <section class="sec">
+        <div class="sec-h"><h3><span data-i18n="cards.listTitle"></span> <span class="pill ref" id="frontCount" hidden></span></h3>
+          <button type="button" class="linkish danger" id="clearAll" data-i18n="cards.clear" hidden></button></div>
+        <ul class="thumbs" id="cardList"></ul>
+        <p class="hint" data-i18n="cards.dsHint"></p>
+      </section>
+      <div class="pane-foot">
+        <button type="button" class="btn primary" data-next="layout"><span data-i18n="cards.next"></span><i data-icon="arrow-right"></i></button>
+      </div>
     </div>
 
     <!-- 2 layout -->
     <div class="pane" data-pane="layout" hidden>
       <h2 data-i18n="layout.title"></h2>
-      <div class="field">
-        <label for="paper" data-i18n="layout.paper"></label>
-        <select id="paper"></select>
-      </div>
-      <div class="field">
-        <label for="card" data-i18n="layout.card"></label>
-        <select id="card"></select>
-      </div>
-      <label class="check"><input type="checkbox" id="borderless"> <span data-i18n="layout.borderless"></span></label>
-      <p class="hint" data-i18n="layout.borderlessHint"></p>
-      <div class="field">
-        <label for="registration" data-i18n="layout.marks"></label>
-        <select id="registration">
-          <option value="3" data-i18n="layout.marks3"></option>
-          <option value="4" data-i18n="layout.marks4"></option>
-        </select>
-      </div>
-      <div class="field">
-        <label for="fit" data-i18n="layout.fit"></label>
-        <select id="fit">
-          <option value="stretch" data-i18n="layout.fitStretch"></option>
-          <option value="crop" data-i18n="layout.fitCrop"></option>
-        </select>
-      </div>
-      <details class="more">
-        <summary data-i18n="layout.more"></summary>
+      <p class="lead" data-i18n="layout.lead"></p>
+      <!-- the native controls stay the source of truth (onSetting); the tiles below set them and fire 'change' -->
+      <select id="paper" hidden></select>
+      <select id="registration" hidden><option value="3"></option><option value="4"></option></select>
+      <select id="fit" hidden><option value="stretch"></option><option value="crop"></option></select>
+
+      <section class="sec">
+        <div class="sec-h"><h3 data-i18n="layout.paper"></h3><small id="paperCount"></small></div>
+        <div class="grid g3" id="paperTiles" role="radiogroup" data-i18n-aria="layout.paper"></div>
+      </section>
+
+      <section class="sec">
+        <div class="sec-h"><h3 data-i18n="layout.card"></h3><small id="cardCount"></small></div>
+        <div class="grid g3" id="cardTiles" role="radiogroup" data-i18n-aria="layout.card"></div>
+        <div class="select-wrap"><select id="card" data-i18n-aria="layout.card"></select><i data-icon="chevron-down"></i></div>
+      </section>
+
+      <section class="sec">
+        <label class="tile row switch-tile" id="borderlessTile">
+          <span class="ico-tile"><i data-icon="square-dashed"></i></span>
+          <span class="tx"><span class="t" data-i18n="layout.borderless"></span><span class="s" id="borderlessHint"></span></span>
+          <input type="checkbox" id="borderless" role="switch" class="switch">
+        </label>
+        <div class="alert warn" id="borderlessNote" role="note" hidden>
+          <i data-icon="triangle-alert"></i>
+          <span id="borderlessText"></span>
+        </div>
+      </section>
+
+      <section class="sec">
+        <div class="sec-h"><h3 data-i18n="layout.marks"></h3><small id="marksInset"></small></div>
+        <div class="grid g2" role="radiogroup" data-i18n-aria="layout.marks">
+          <button type="button" class="tile row" role="radio" data-set="registration" data-val="3">
+            <span class="markpic"><i class="sq"></i><i class="tr"></i><i class="bl"></i></span>
+            <span class="tx"><span class="t" data-i18n="layout.marks3t"></span><span class="s">CAMEO 4/5, Portrait</span></span>
+          </button>
+          <button type="button" class="tile row" role="radio" data-set="registration" data-val="4">
+            <span class="markpic"><i class="sq"></i><i class="tr"></i><i class="bl"></i><i class="br"></i></span>
+            <span class="tx"><span class="t" data-i18n="layout.marks4t"></span><span class="s">CAMEO 5α</span></span>
+          </button>
+        </div>
+      </section>
+
+      <section class="sec">
+        <div class="sec-h"><h3 data-i18n="layout.fit"></h3></div>
+        <div class="grid g2" role="radiogroup" data-i18n-aria="layout.fit">
+          <button type="button" class="tile row" role="radio" data-set="fit" data-val="stretch">
+            <span class="ico-tile"><i data-icon="maximize"></i></span><span class="tx"><span class="t" data-i18n="layout.fitStretch"></span></span>
+          </button>
+          <button type="button" class="tile row" role="radio" data-set="fit" data-val="crop">
+            <span class="ico-tile"><i data-icon="crop"></i></span><span class="tx"><span class="t" data-i18n="layout.fitCrop"></span></span>
+          </button>
+        </div>
+      </section>
+
+      <details class="more tile-more" id="moreBox">
+        <summary class="tile row">
+          <span class="ico-tile"><i data-icon="sliders-horizontal"></i></span>
+          <span class="tx"><span class="t" data-i18n="layout.more"></span><span class="s" data-i18n="layout.moreSub"></span></span>
+          <i data-icon="chevron-down" class="chev"></i>
+        </summary>
+        <div class="field">
+          <label for="extendCorners"><span data-i18n="layout.extendCorners"></span> <span class="pill ref" id="cornersFrom" data-i18n="layout.cornersFromImport" hidden></span></label>
+          <input id="extendCorners" placeholder="3.5mm" inputmode="decimal">
+          <p class="hint" data-i18n="layout.extendCornersHint"></p>
+        </div>
+        <div class="field">
+          <label for="extendEdges" data-i18n="layout.extendEdges"></label>
+          <input id="extendEdges" placeholder="1mm" inputmode="decimal">
+          <p class="hint" data-i18n="layout.extendEdgesHint"></p>
+        </div>
         <div class="field">
           <label for="extendBleed" data-i18n="layout.extendBleed"></label>
           <input id="extendBleed" placeholder="0.5mm" inputmode="decimal">
@@ -129,71 +183,96 @@
           <select id="specialty"><option value="" data-i18n="layout.none"></option></select>
         </div>
       </details>
-      <dl class="facts" id="layoutFacts"></dl>
       <p class="warn" id="layoutError" hidden></p>
+      <div class="pane-foot">
+        <button type="button" class="btn primary" data-next="make"><span data-i18n="layout.next"></span><i data-icon="arrow-right"></i></button>
+      </div>
     </div>
 
     <!-- 3 make -->
     <div class="pane" data-pane="make" hidden>
       <h2 data-i18n="make.title"></h2>
       <p class="lead" data-i18n="make.lead"></p>
+      <div class="grid g2">
+        <label class="tile row switch-tile"><span class="tx"><span class="t" data-i18n="make.outlineT"></span><span class="s" data-i18n="make.outlineS"></span></span>
+          <input type="checkbox" id="showOutline" role="switch" class="switch"></label>
+        <label class="tile row switch-tile"><span class="tx"><span class="t" data-i18n="make.useOffsetT"></span><span class="s mono" id="offsetNow"></span></span>
+          <input type="checkbox" id="useOffset" role="switch" class="switch" checked></label>
+      </div>
       <div class="field">
         <label for="label" data-i18n="make.label"></label>
-        <input id="label" maxlength="60">
+        <input id="label" maxlength="60" data-i18n-ph="make.labelPh">
       </div>
-      <label class="check"><input type="checkbox" id="showOutline"> <span data-i18n="make.outline"></span></label>
-      <label class="check"><input type="checkbox" id="useOffset" checked> <span data-i18n="make.useOffset"></span> <small id="offsetNow"></small></label>
-      <button type="button" class="btn primary" id="generate" data-i18n="make.go"></button>
-      <p class="status" id="makeStatus" role="status"></p>
-      <ul class="downloads" id="pdfActions" hidden>
-        <li>
-          <a class="btn" id="downloadPdf" download data-i18n="make.download"></a>
-          <a class="btn ghost" id="openPdf" target="_blank" rel="noopener" data-i18n="make.open"></a>
-          <p class="hint" id="pdfInfo"></p>
-        </li>
-        <li>
-          <a class="btn" id="downloadPng" download data-i18n="make.png"></a>
-          <p class="hint" id="pngInfo"></p>
-        </li>
-        <li>
-          <a class="btn" id="downloadStudio" download data-i18n="make.studio"></a>
-          <p class="hint" id="studioInfo"></p>
-        </li>
-      </ul>
+      <button type="button" class="btn primary" id="generate"><i data-icon="file-down"></i><span data-i18n="make.go"></span></button>
+      <div class="status" id="makeStatus" role="status"><span class="c"><i data-icon="check"></i></span><span class="tx"><span class="t" id="makeStatusT"></span><span class="s" id="makeStatusS"></span></span></div>
+      <section class="sec" id="pdfActions" hidden>
+        <div class="sec-h"><h3 data-i18n="make.files"></h3></div>
+        <ul class="files">
+          <li class="file rec">
+            <span class="fi"><i data-icon="file-down"></i></span>
+            <span class="tx"><span class="t">PDF <span class="pill cut" data-i18n="make.recommended"></span></span><span class="s" id="pdfInfo"></span></span>
+            <a class="btn sm cut" id="downloadPdf" download data-i18n-aria="make.download"><i data-icon="download"></i></a>
+            <a class="btn sm ghost" id="openPdf" target="_blank" rel="noopener" data-i18n-aria="make.open"><i data-icon="eye"></i></a>
+          </li>
+          <li class="file">
+            <span class="fi"><i data-icon="file-image"></i></span>
+            <span class="tx"><span class="t">PNG (zip)</span><span class="s" id="pngInfo"></span></span>
+            <a class="btn sm ghost" id="downloadPng" download data-i18n-aria="make.png"><i data-icon="download"></i></a>
+          </li>
+          <li class="file">
+            <span class="fi"><i data-icon="file-archive"></i></span>
+            <span class="tx"><span class="t" data-i18n="make.studioT"></span><span class="s" id="studioInfo"></span></span>
+            <a class="btn sm ghost" id="downloadStudio" download data-i18n-aria="make.studio"><i data-icon="download"></i></a>
+          </li>
+        </ul>
+      </section>
       <div class="pages" id="pages"></div>
       <details class="log" id="logBox" hidden><summary data-i18n="make.log"></summary><pre id="log"></pre></details>
+      <div class="pane-foot">
+        <button type="button" class="btn primary" data-next="cut"><span data-i18n="make.next"></span><i data-icon="arrow-right"></i></button>
+      </div>
     </div>
 
     <!-- 4 print & cut -->
     <div class="pane" data-pane="cut" hidden>
       <h2 data-i18n="cut.title"></h2>
-      <div class="seg" role="radiogroup" aria-labelledby="routeLabel">
-        <span id="routeLabel" class="seg-label" data-i18n="route.label"></span>
-        <label><input type="radio" name="route" value="pdf" checked> <span data-i18n="route.pdf"></span></label>
-        <label><input type="radio" name="route" value="studio"> <span data-i18n="route.studio"></span></label>
+      <p class="lead" data-i18n="cut.lead"></p>
+      <div class="grid g2 routes" role="radiogroup" data-i18n-aria="route.label">
+        <label class="route"><input type="radio" name="route" value="pdf" checked>
+          <img src="static/assets/guide/route-pdf.jpg" alt=""><span class="pill solid-cut badge" data-i18n="make.recommended"></span>
+          <span class="tx"><span class="t"><i data-icon="file-down"></i><span data-i18n="route.pdfT"></span></span><span class="s" data-i18n="route.pdfS"></span></span></label>
+        <label class="route"><input type="radio" name="route" value="studio">
+          <img src="static/assets/guide/route-studio.jpg" alt="">
+          <span class="tx"><span class="t"><i data-icon="laptop"></i><span data-i18n="route.studioT"></span></span><span class="s" data-i18n="route.studioS"></span></span></label>
       </div>
       <p class="hint" id="routeHint"></p>
-      <ol class="checklist">
-        <li data-route="pdf">
+      <ol class="tl">
+        <li data-route="pdf"><img class="pic" src="static/assets/guide/step-open-file.jpg" alt=""><div>
           <strong data-i18n="cut.t1"></strong>
           <p data-i18n="cut.d1"></p>
-          <a class="btn" id="downloadTpl" download data-i18n="cut.tpl"></a>
+          <div class="act">
+            <a class="btn sm" id="downloadTpl" download><i data-icon="download"></i><span id="tplName"></span></a>
+            <a class="btn sm" id="downloadPresetDxf" download hidden><i data-icon="download"></i><span data-i18n="cut.presetDxf"></span></a>
+          </div>
           <p class="warn" id="tplMissing" data-i18n="cut.tplMissing" hidden></p>
-        </li>
-        <li data-route="pdf"><strong data-i18n="cut.t2"></strong><p data-i18n="cut.d2"></p>
+        </div></li>
+        <li data-route="pdf"><img class="pic" src="static/assets/guide/step-print-100.jpg" alt=""><div>
+          <strong data-i18n="cut.t2"></strong><p data-i18n="cut.d2"></p>
+          <div class="act"><span class="pill">Actual size · 100%</span><span class="pill warn"><i data-icon="triangle-alert"></i><span data-i18n="cut.noFit"></span></span></div>
           <button type="button" class="linkish" data-goto="machine" data-i18n="cut.marksLink"></button>
-        </li>
-        <li data-route="studio">
+        </div></li>
+        <li data-route="studio"><img class="pic" src="static/assets/guide/step-open-file.jpg" alt=""><div>
           <strong data-i18n="cutS.t1"></strong>
           <p data-i18n="cutS.d1"></p>
-          <a class="btn" id="downloadStudio2" download data-i18n="make.studio"></a>
+          <div class="act"><a class="btn sm" id="downloadStudio2" download><i data-icon="download"></i><span data-i18n="make.studio"></span></a></div>
           <p class="warn" id="studioMissing" data-i18n="cutS.missing" hidden></p>
-        </li>
-        <li data-route="studio"><strong data-i18n="cutS.t2"></strong><p id="placeText"></p></li>
-        <li data-route="studio"><strong data-i18n="cutS.t3"></strong><p data-i18n="cutS.d3"></p></li>
-        <li><strong data-i18n="cut.t3"></strong><p id="measureText"></p></li>
-        <li><strong data-i18n="cut.t4"></strong><p data-i18n="cut.d4"></p><p class="warn" id="borderlessMat" data-i18n="cut.borderlessMat" hidden></p></li>
-        <li><strong data-i18n="cut.t5"></strong><p data-i18n="cut.d5"></p>
+        </div></li>
+        <li data-route="studio"><img class="pic" src="static/assets/guide/route-studio.jpg" alt=""><div><strong data-i18n="cutS.t2"></strong><p id="placeText"></p></div></li>
+        <li data-route="studio"><img class="pic" src="static/assets/guide/step-print-100.jpg" alt=""><div><strong data-i18n="cutS.t3"></strong><p data-i18n="cutS.d3"></p></div></li>
+        <li><img class="pic" src="static/assets/guide/step-measure.jpg" alt=""><div><strong data-i18n="cut.t3"></strong><p id="measureText"></p></div></li>
+        <li><img class="pic" src="static/assets/guide/step-place-mat.jpg" alt=""><div><strong data-i18n="cut.t4"></strong><p data-i18n="cut.d4"></p>
+          <div class="alert warn" id="borderlessMat" hidden><i data-icon="triangle-alert"></i><span id="borderlessMatText"></span></div></div></li>
+        <li><img class="pic" src="static/assets/guide/step-blade.jpg" alt=""><div><strong data-i18n="cut.t5"></strong><p data-i18n="cut.d5"></p>
           <table class="blades">
             <thead><tr><th data-i18n="cut.material"></th><th>Blade</th><th>Force</th><th>Speed</th><th data-i18n="cut.passes"></th></tr></thead>
             <tbody>
@@ -202,9 +281,12 @@
             </tbody>
           </table>
           <p class="hint" data-i18n="cut.bladeHint"></p>
-        </li>
-        <li><strong data-i18n="cut.t6"></strong><p data-i18n="cut.d6"></p></li>
+        </div></li>
+        <li><img class="pic" src="static/assets/guide/step-peel.jpg" alt=""><div><strong data-i18n="cut.t6"></strong><p data-i18n="cut.d6"></p></div></li>
       </ol>
+      <div class="pane-foot">
+        <button type="button" class="btn ghost" data-goto="machine"><i data-icon="crosshair"></i><span data-i18n="cut.toMachine"></span></button>
+      </div>
     </div>
   </section>
 </div>
@@ -236,19 +318,23 @@
       <div class="game-head" id="gameHead"></div>
       <div class="field">
         <label for="impFormat" data-i18n="import.format"></label>
-        <select id="impFormat"></select>
+        <div class="select-wrap"><select id="impFormat"></select><i data-icon="chevron-down"></i></div>
       </div>
       <div class="field">
         <label for="impDeck" data-i18n="import.deck"></label>
         <textarea id="impDeck" rows="9" spellcheck="false"></textarea>
         <p class="hint" data-i18n="import.deckHint"></p>
       </div>
-      <details class="more" id="impOptBox">
-        <summary data-i18n="imp.options"></summary>
+      <details class="more tile-more" id="impOptBox">
+        <summary class="tile row">
+          <span class="ico-tile"><i data-icon="sliders-horizontal"></i></span>
+          <span class="tx"><span class="t" data-i18n="imp.options"></span><span class="s" id="impOptSub"></span></span>
+          <i data-icon="chevron-down" class="chev"></i>
+        </summary>
         <div id="impOptions"></div>
       </details>
       <p class="estimate" id="impEstimate"></p>
-      <button type="button" class="btn primary" id="impRun" data-i18n="import.run"></button>
+      <button type="button" class="btn primary" id="impRun"><i data-icon="download"></i><span data-i18n="import.run"></span></button>
       <p class="hint center" data-i18n="imp.runNote"></p>
     </div>
 
@@ -272,57 +358,71 @@
         <button type="button" class="btn ghost" id="impEdit" data-i18n="imp.edit"></button>
         <button type="button" class="btn ghost danger" id="impCancel" data-i18n="import.cancel" hidden></button>
       </div>
-      <button type="button" class="btn primary" id="impUse" data-i18n="imp.use"></button>
+      <button type="button" class="btn primary" id="impUse"><i data-icon="arrow-right"></i><span data-i18n="imp.use"></span></button>
     </div>
   </aside>
 </div>
 
 <!-- ============================================================ C. machine setup -->
 <div class="machine" data-ws-pane="machine" hidden>
+  <div class="mach-head"><h2><i data-icon="settings"></i><span data-i18n="ws.machine"></span></h2><small data-i18n="mach.lead"></small></div>
   <div class="mach-grid">
     <section class="tool" id="toolCal">
-      <h2 data-i18n="cal.title"></h2>
-      <p class="hint" data-i18n="cal.lead"></p>
-      <a class="btn ghost" id="downloadCal" download data-i18n="cal.download"></a>
-      <div class="offset">
-        <div class="field"><label for="offX">X (px)</label><input id="offX" type="number" step="1" value="0"></div>
-        <div class="field"><label for="offY">Y (px)</label><input id="offY" type="number" step="1" value="0"></div>
-        <div class="field"><label for="offA" data-i18n="cal.angle"></label><input id="offA" type="number" step="0.05" value="0"></div>
+      <img class="tool-img" src="static/assets/guide/calibrate.jpg" alt="">
+      <div class="tool-body">
+        <h2><span data-i18n="cal.title"></span> <span class="pill ref" id="calState" hidden><i data-icon="check"></i><span data-i18n="mach.set"></span></span></h2>
+        <p class="hint" data-i18n="cal.lead"></p>
+        <a class="btn ghost" id="downloadCal" download><i data-icon="download"></i><span data-i18n="cal.download"></span></a>
+        <div class="offset">
+          <div class="field"><label for="offX">X (px)</label><input id="offX" type="number" step="1" value="0"></div>
+          <div class="field"><label for="offY">Y (px)</label><input id="offY" type="number" step="1" value="0"></div>
+          <div class="field"><label for="offA" data-i18n="cal.angle"></label><input id="offA" type="number" step="0.05" value="0"></div>
+        </div>
+        <label class="switch-line"><span data-i18n="cal.enabled"></span><input type="checkbox" id="offEnabled" role="switch" class="switch"></label>
+        <button type="button" class="btn" id="saveOffset"><i data-icon="check"></i><span data-i18n="cal.save"></span></button>
+        <p class="hint ok" id="offStatus" role="status"></p>
       </div>
-      <label class="check"><input type="checkbox" id="offEnabled"> <span data-i18n="cal.enabled"></span></label>
-      <button type="button" class="btn" id="saveOffset" data-i18n="cal.save"></button>
-      <p class="status" id="offStatus" role="status"></p>
     </section>
 
     <section class="tool" id="toolTpl">
-      <h2 data-i18n="mach.tplTitle"></h2>
-      <p class="hint" data-i18n="mach.tplLead"></p>
-      <div class="field"><label for="tplPaper" data-i18n="layout.paper"></label><select id="tplPaper"></select></div>
-      <ul class="tpl-list" id="tplList"></ul>
+      <img class="tool-img" src="static/assets/guide/step-open-file.jpg" alt="">
+      <div class="tool-body">
+        <h2><span data-i18n="mach.tplTitle"></span> <span class="pill" id="tplCount"></span></h2>
+        <p class="hint" data-i18n="mach.tplLead"></p>
+        <div class="select-wrap"><select id="tplPaper" data-i18n-aria="layout.paper"></select><i data-icon="chevron-down"></i></div>
+        <ul class="tpl-list" id="tplList"></ul>
+      </div>
     </section>
 
     <section class="tool" id="toolMarks">
-      <h2 data-i18n="mach.marksTitle"></h2>
-      <p class="hint" data-i18n="marks.lead"></p>
-      <a class="btn ghost" id="downloadMarks" download data-i18n="marks.download"></a>
-      <p class="hint" id="marksInfo"></p>
+      <div class="tool-img ph-ic"><i data-icon="crosshair"></i></div>
+      <div class="tool-body">
+        <h2 data-i18n="mach.marksTitle"></h2>
+        <p class="hint" data-i18n="marks.lead"></p>
+        <a class="btn ghost" id="downloadMarks" download><i data-icon="download"></i><span data-i18n="marks.download"></span></a>
+        <p class="hint" id="marksInfo"></p>
+      </div>
     </section>
 
     <section class="tool" id="toolBlades">
-      <h2 data-i18n="mach.bladesTitle"></h2>
-      <table class="blades">
-        <thead><tr><th data-i18n="cut.material"></th><th>Blade</th><th>Force</th><th>Speed</th><th data-i18n="cut.passes"></th></tr></thead>
-        <tbody>
-          <tr><td data-i18n="cut.m180"></td><td>4</td><td>20</td><td>4</td><td>1</td></tr>
-          <tr><td data-i18n="cut.mLam"></td><td>8–10</td><td>33–35</td><td>5</td><td>4–6</td></tr>
-        </tbody>
-      </table>
-      <p class="hint" data-i18n="cut.bladeHint"></p>
+      <img class="tool-img" src="static/assets/guide/step-blade.jpg" alt="">
+      <div class="tool-body">
+        <h2 data-i18n="mach.bladesTitle"></h2>
+        <table class="blades">
+          <thead><tr><th data-i18n="cut.material"></th><th>Blade</th><th>Force</th><th>Speed</th><th data-i18n="cut.passes"></th></tr></thead>
+          <tbody>
+            <tr><td data-i18n="cut.m180"></td><td>4</td><td>20</td><td>4</td><td>1</td></tr>
+            <tr><td data-i18n="cut.mLam"></td><td>8–10</td><td>33–35</td><td>5</td><td>4–6</td></tr>
+          </tbody>
+        </table>
+        <p class="hint" data-i18n="cut.bladeHint"></p>
+      </div>
     </section>
   </div>
 </div>
 
 <div class="toast" id="toast" role="alert" hidden></div>
+<script src="static/icons.js"></script>
 <script src="static/i18n.js"></script>
 <script src="static/app.js"></script>
 </body>

@@ -27,6 +27,10 @@ import size_convert  # noqa: E402
 import utilities  # noqa: E402
 from enums import Orientation, Registration, Variant  # noqa: E402
 
+import presets  # noqa: E402  (sibling module: SRK layouts upstream can't express)
+
+presets.install()
+
 PPI = 300
 MM_PER_PX = 25.4 / PPI
 
@@ -55,7 +59,14 @@ def options() -> dict:
     return {"cards": cards, "papers": papers, "combos": combos, "specialty": specialty}
 
 
+# .studio3 cut files for the SRK presets (made in Studio from the preset's DXF; upstream has none)
+PRESET_TEMPLATES = Path(__file__).resolve().parent / "templates"
+
+
 def template_path(name: str, borderless: bool) -> Path | None:
+    own = PRESET_TEMPLATES / f"{name}.studio3"
+    if own.exists():
+        return own
     base = utilities.resolve_cutting_templates_dir(REPO / "cutting_templates")
     p = (base / "borderless" if borderless else base) / f"{name}.studio3"
     return p if p.exists() else None
@@ -79,6 +90,11 @@ def resolve_layout(paper: str, card: str, borderless: bool = False, specialty: s
 
 def _resolve(paper: str, card: str, borderless: bool, specialty: str | None) -> tuple[dict, dict]:
     """(geometry in mm for the UI, the raw unit strings + orientations upstream draws the marks from)."""
+    with presets.active(specialty):
+        return _resolve_inner(paper, card, borderless, specialty)
+
+
+def _resolve_inner(paper: str, card: str, borderless: bool, specialty: str | None) -> tuple[dict, dict]:
     cfg = utilities.load_layout_config()
     default_reg = cfg.defaults.registration.default
     if specialty:
@@ -148,6 +164,9 @@ def _resolve(paper: str, card: str, borderless: bool, specialty: str | None) -> 
         "registration": {"inset": _mm(inset), "thickness": _mm(thickness), "length": _mm(length)},
         "template": template,
         "templateAvailable": tpl is not None,
+        # SRK preset: cut file page is larger than the paper → sheet goes this far in from the mat grid, PDF only
+        "preset": presets.is_preset(specialty),
+        "matOffset": presets.expansion_mm(specialty) / 2 if presets.is_preset(specialty) else 0,
     }, marks
 
 
@@ -201,10 +220,11 @@ def generate(job_dir: Path, opts: dict, offset: dict | None) -> tuple[Path, str,
             os.chdir(job_dir)  # upstream reads/writes ./data/offset_data.json relative to cwd
             if offset:
                 utilities.save_offset(int(offset.get("x", 0)), int(offset.get("y", 0)), float(offset.get("angle", 0)))
-            with contextlib.redirect_stdout(log):
-                utilities.generate_pdf(output_path=str(out_pdf), output_images=False, **args)
-            with contextlib.redirect_stdout(io.StringIO()):
-                utilities.generate_pdf(output_path=str(raw), output_images=True, **args)
+            with presets.active(args["specialty"]):
+                with contextlib.redirect_stdout(log):
+                    utilities.generate_pdf(output_path=str(out_pdf), output_images=False, **args)
+                with contextlib.redirect_stdout(io.StringIO()):
+                    utilities.generate_pdf(output_path=str(raw), output_images=True, **args)
         finally:
             os.chdir(prev)
 
@@ -212,7 +232,9 @@ def generate(job_dir: Path, opts: dict, offset: dict | None) -> tuple[Path, str,
     meta = export_pngs(raw, out, marks, registration, ppi, only_fronts, f"{geom['paper']}-{args['card_size']}")
     shutil.rmtree(raw, ignore_errors=True)
     meta.update(template=geom["template"], templateAvailable=geom["templateAvailable"],
-                borderless=bool(args["borderless"] and not args["specialty"]))
+                borderless=bool(args["borderless"] and not args["specialty"]),
+                pdfOnly=bool(args["borderless"] and not args["specialty"]) or geom["matOffset"] > 0,
+                matOffset=geom["matOffset"])
     return out_pdf, log.getvalue(), meta
 
 
@@ -261,7 +283,8 @@ def marks_only(paper: str, card: str, borderless: bool, specialty: str | None, r
     geom, marks = _resolve(paper, card, borderless, specialty)
     im = mark_page(marks, registration, ppi).point(lambda v: 0 if v < 128 else 255).convert("RGB")
     portrait = marks["orientation"] == Orientation.PORTRAIT
-    name = f"{geom['paper']}-{card}{'-borderless' if borderless and not specialty else ''}-marks-{registration.value}"
+    stem = specialty if presets.is_preset(specialty) else f"{geom['paper']}-{card}{'-borderless' if borderless and not specialty else ''}"
+    name = f"{stem}-marks-{registration.value}"
     out_dir.mkdir(parents=True, exist_ok=True)
     pdf, png = out_dir / f"{name}.pdf", out_dir / f"{name}.png"
     im.save(pdf, format="PDF", resolution=ppi)

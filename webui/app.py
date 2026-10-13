@@ -138,6 +138,15 @@ def api_template(name):
     return send_file(p, as_attachment=True, download_name=p.name)
 
 
+@app.get("/api/preset/<name>.dxf")
+def api_preset_dxf(name):
+    """Cut lines of an SRK preset, to build its .studio3 in Silhouette Studio (steps in webui/templates/README.md)."""
+    if not scm.presets.is_preset(name):
+        abort(404)
+    p = scm.presets.write_dxf(name, DATA / "presets" / f"{name}.dxf")
+    return send_file(p, as_attachment=True, download_name=p.name, max_age=0)
+
+
 @app.get("/api/calibration/<paper>")
 def api_calibration(paper):
     if not re.fullmatch(r"\w+", paper):
@@ -505,9 +514,9 @@ def api_studio_zip(job_id):
     meta = load_meta(d)
     if not meta:
         abort(404)
-    if meta["borderless"]:
-        # borderless templates fake a page 13 mm larger than the paper; Studio would print that page shifted and
-        # cropped, so these sheets only work printed from the PDF (Studio just cuts)
+    if meta.get("pdfOnly", meta["borderless"]):
+        # borderless templates (and SRK presets with marks under 10 mm) fake a page larger than the paper; Studio
+        # would print that page shifted and cropped, so these sheets only work printed from the PDF (Studio just cuts)
         return jsonify({"error": "borderless-pdf-only"}), 409
     tpl = scm.template_path(meta["template"], meta["borderless"])
     buf = io.BytesIO()

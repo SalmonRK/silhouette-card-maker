@@ -18,7 +18,7 @@
     layout: null,
     sheet: 0,
     settings: Object.assign(
-      { paper: 'a4', card: 'standard', borderless: false, registration: '3', fit: 'stretch', extendBleed: '', crop: '', specialty: '' },
+      { paper: 'a4', card: 'standard', borderless: false, registration: '3', fit: 'stretch', extendBleed: '', extendCorners: '', extendEdges: '', crop: '', specialty: '' },
       store.get('settings', {}),
     ),
   }
@@ -104,7 +104,8 @@
     const { back, ds } = st.job
     const front = printOrder()
     const dsBy = Object.fromEntries(ds.map((f) => [f.stem, f]))
-    $('#frontCount').textContent = front.length ? `(${front.length})` : ''
+    $('#frontCount').textContent = t('cards.count', { n: front.length })
+    $('#frontCount').hidden = !front.length
     $('#clearAll').hidden = !front.length
     const list = $('#cardList')
     list.textContent = ''
@@ -114,21 +115,20 @@
       li.textContent = t('cards.none')
       list.append(li)
     }
+    // thumbnails as in the design: number, remove, and "+ own back" / "own back" on each card
     front.forEach((f, i) => {
       const li = document.createElement('li')
+      li.className = 'th'
       const own = dsBy[f.stem]
       li.innerHTML = `
-        <span class="idx">${i + 1}</span>
-        <img class="thumb-sm" alt="" loading="lazy">
-        <span class="name"></span>
-        <label class="mini ${own ? 'has' : ''}" title="${t('cards.ownBack')}">
-          <input type="file" accept="image/*" hidden>
-          ${own ? '<img class="thumb-sm" alt="">' : `<span>${t('cards.ownBack')}</span>`}
-        </label>
-        <button type="button" class="x" aria-label="${t('cards.remove')} ${f.name}">×</button>`
+        <img alt="" loading="lazy">
+        <span class="i">${i + 1}</span>
+        <button type="button" class="x" aria-label="${t('cards.remove')} ${esc(f.name)}">${icon('x')}</button>
+        <label class="${own ? 'flip' : 'add'}" title="${t('cards.ownBack')}">
+          <input type="file" accept="image/*" hidden>${icon(own ? 'flip-horizontal-2' : 'plus')}<span>${t('cards.ownBack')}</span>
+        </label>`
       li.querySelector('img').src = img('front', f.name)
-      li.querySelector('.name').textContent = f.name
-      if (own) li.querySelector('label img').src = img('ds', own.name)
+      li.title = f.name
       li.querySelector('input').addEventListener('change', (e) => upload('ds', e.target.files, f.name))
       li.querySelector('.x').addEventListener('click', () => remove('front', f.name))
       list.append(li)
@@ -136,6 +136,7 @@
     const b = back[0]
     $('#backImg').hidden = !b
     $('#backEmpty').hidden = !!b
+    $('#backName').textContent = b ? b.name : t('cards.backNone')
     if (b) $('#backImg').src = img('back', b.name) + '&b=' + b.size
   }
 
@@ -152,6 +153,8 @@
   // ------------------------------------------------------------ layout
   const label = (k) => k.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
   const fmt = (n) => (Math.round(n * 100) / 100).toString()
+  // SRK presets (webui/presets.py) carry their own name in i18n; upstream specialty layouts use the key
+  const specialtyLabel = (k) => (I18N.en[`preset.${k}`] ? t(`preset.${k}`) : label(k))
 
   function fillSelects() {
     const { cards, papers, combos, specialty } = st.opts
@@ -168,13 +171,72 @@
     if (!ok.has(st.settings.card)) st.settings.card = ok.has('standard') ? 'standard' : [...ok][0]
     cardSel.value = st.settings.card
     const sp = $('#specialty')
-    sp.innerHTML = `<option value="">${t('layout.none')}</option>` + specialty.map((s) => `<option value="${s}">${label(s)}</option>`).join('')
+    sp.innerHTML = `<option value="">${t('layout.none')}</option>` + specialty.map((s) => `<option value="${s}">${specialtyLabel(s)}</option>`).join('')
     sp.value = st.settings.specialty
     $('#borderless').checked = st.settings.borderless
     $('#registration').value = st.settings.registration
     $('#fit').value = st.settings.fit
     $('#extendBleed').value = st.settings.extendBleed
+    $('#extendCorners').value = st.settings.extendCorners
+    $('#extendEdges').value = st.settings.extendEdges
     $('#crop').value = st.settings.crop
+    renderPaperTiles()
+    renderCardTiles(ok)
+  }
+
+  // ------------------------------------------------------------ step 2 picture tiles (Figma D2 / D2b)
+  // Each tile sets its native control and fires 'change', so onSetting stays the only write path.
+  const PAPERS = ['a4', 'letter', 'legal', 'a3', 'tabloid', 'arch_b']
+  const FEATURED = ['standard', 'poker', 'japanese', 'bridge', 'tarot', 'mini']
+  function setNative(id, value) {
+    const n = $('#' + id)
+    if (n.value === value) return
+    n.value = value
+    n.dispatchEvent(new Event('change'))
+  }
+  function tile(set, val, inner) {
+    const b = document.createElement('button')
+    b.type = 'button'
+    b.className = 'tile'
+    b.setAttribute('role', 'radio')
+    b.dataset.set = set
+    b.dataset.val = val
+    b.innerHTML = inner
+    return b
+  }
+  // the sheet's real orientation (borderless A4 is portrait) → "210 × 297", not the paper's stored landscape size
+  const portrait = () => (st.layout ? st.layout.pageW < st.layout.pageH : !!st.settings.borderless)
+  function renderPaperTiles() {
+    const box = $('#paperTiles')
+    const papers = st.opts.papers
+    const keys = PAPERS.filter((k) => papers[k]).concat(Object.keys(papers).filter((k) => !PAPERS.includes(k)))
+    $('#paperCount').textContent = t('layout.paperCount', { n: keys.length })
+    box.textContent = ''
+    for (const k of keys) {
+      const p = papers[k], long = Math.max(p.w, p.h), short = Math.min(p.w, p.h)
+      const L = Math.min(44, Math.max(30, 30 + (long - 279) * 0.08)), S = (L * short) / long
+      const [pw, ph] = portrait() ? [S, L] : [L, S]
+      const [dw, dh] = portrait() ? [short, long] : [long, short]
+      box.append(tile('paper', k, `<span class="pict"><i class="paper" style="width:${pw}px;height:${ph}px"></i></span>
+        <span class="t">${label(k)}</span><span class="s">${fmt(dw)} × ${fmt(dh)}</span>`))
+    }
+  }
+  function renderCardTiles(ok) {
+    const box = $('#cardTiles')
+    const cards = st.opts.cards
+    box.textContent = ''
+    for (const k of FEATURED.filter((k) => ok.has(k) && cards[k])) {
+      const c = cards[k], s = Math.min(0.43, 42 / c.h)
+      box.append(tile('card', k, `<span class="pict"><i class="card" style="width:${c.w * s}px;height:${c.h * s}px"></i></span>
+        <span class="t">${label(k)}</span><span class="s">${fmt(c.w)} × ${fmt(c.h)}</span>`))
+    }
+  }
+  function renderTiles() {
+    const s = st.settings
+    $$('[data-pane=layout] [data-set]').forEach((b) => b.setAttribute('aria-checked', String(s[b.dataset.set] === b.dataset.val)))
+    const L = st.layout
+    $('#marksInset').textContent = L ? t('layout.marksInset', { n: fmt(L.registration.inset) }) : ''
+    $('#cardCount').textContent = t('layout.cardCount', { n: $('#card').options.length })
   }
 
   async function loadLayout() {
@@ -182,6 +244,12 @@
     const q = new URLSearchParams({ paper: s.paper, card: s.card, borderless: s.borderless ? '1' : '0', specialty: s.specialty })
     try {
       st.layout = await api(`api/layout?${q}`)
+      // borderless: also ask how many the normal layout fits, to show what the switch gains (A4 8 → 9)
+      st.normalCount = null
+      if (s.borderless) {
+        q.set('borderless', '0')
+        st.normalCount = await api(`api/layout?${q}`).then((n) => n.slots.length, () => null)
+      }
       $('#layoutError').hidden = true
     } catch (e) {
       st.layout = null
@@ -196,6 +264,7 @@
     const el = e.target
     const k = el.id
     st.settings[k] = el.type === 'checkbox' ? el.checked : el.value
+    if (k === 'extendCorners') delete st.settings.cornersFrom
     store.set('settings', st.settings)
     if (['paper', 'borderless'].includes(k)) fillSelects()
     if (['paper', 'card', 'borderless', 'specialty'].includes(k)) loadLayout()
@@ -205,19 +274,48 @@
   const perSheet = () => (st.layout ? st.layout.slots.length : 0)
   const sheetCount = () => Math.max(1, Math.ceil((st.job?.front.length || 0) / Math.max(1, perSheet())))
 
+  // facts as chips under the sheet (design: the floating bar on the mat)
   function renderFacts() {
     const L = st.layout
-    const dl = $('#layoutFacts')
-    if (!L) { dl.textContent = ''; return }
+    const box = $('#stageMeta')
+    if (!L) { box.textContent = ''; return }
     const r = L.registration
-    const rows = [
-      [t('layout.cardSize'), `${fmt(L.cardW)} × ${fmt(L.cardH)} mm`],
-      [t('layout.perSheet'), `${L.slots.length} (${L.cols} × ${L.rows})`],
-      [t('layout.sheets'), String(sheetCount())],
-      [t('layout.marksVal'), `${fmt(r.length)} / ${fmt(r.thickness)} / ${fmt(r.inset)} mm`],
-      [t('layout.template'), L.templateAvailable ? `${L.template}.studio3` : t('layout.noTemplate')],
-    ]
-    dl.innerHTML = rows.map(([a, b]) => `<div><dt>${a}</dt><dd>${b}</dd></div>`).join('')
+    const chip = (ic, html, title = '', cls = '') => `<span class="fact ${cls}" title="${esc(title)}">${icon(ic)}${html}</span>`
+    const gain = gainCount()
+    const job = st.job || { front: [], back: [], ds: [] }
+    const f0 = job.png?.files?.[0]
+    if (st.step === 'cards') {
+      box.innerHTML = [
+        chip('image', t('cards.factCards', { n: job.front.length })),
+        chip('layers', t('layout.factSheets', { n: sheetCount() })),
+        chip('flip-horizontal-2', t('cards.factBacks', { b: job.back.length, d: job.ds.length })),
+      ].join('')
+      return
+    }
+    if (st.step === 'make' && job.pdf && f0) {
+      box.innerHTML = [
+        chip('file-text', `PDF <b>${f0.mm[0]} × ${f0.mm[1]}</b> mm`),
+        chip('file-image', `PNG <b>${f0.px[0]} × ${f0.px[1]}</b> px · <b>${job.png.ppi}</b> dpi`),
+        chip('layers', t('make.factPages', { n: job.pages.length })),
+      ].join('')
+      return
+    }
+    if (st.step === 'cut') {
+      box.innerHTML = [
+        chip('ruler', t('cut.factWidth', { w: fmt(L.cardW) })),
+        chip('crosshair', t('cut.factMarks', { n: st.settings.registration })),
+        chip('file-text', `<b>${L.templateAvailable ? esc(L.template) + '.studio3' : t('layout.noTemplate')}</b>`),
+      ].join('')
+      return
+    }
+    box.innerHTML = [
+      chip(L.cols === 3 && L.rows === 3 ? 'grid-3x3' : 'grid-2x2', t('layout.factPerSheet', { n: L.slots.length, c: L.cols, r: L.rows }), t('layout.perSheet')),
+      chip('layers', t('layout.factSheets', { n: sheetCount() }), t('layout.sheets')),
+      chip('ruler', `<b>${fmt(L.cardW)} × ${fmt(L.cardH)}</b> mm · ${label(L.paper)} ${portrait() ? t('layout.portrait') : t('layout.landscape')}`, t('layout.cardSize')),
+      chip('file-text', `<b>${L.templateAvailable ? esc(L.template) + '.studio3' : t('layout.noTemplate')}</b>`,
+        `${t('layout.template')} · ${t('layout.marksVal')} ${fmt(r.length)} / ${fmt(r.thickness)} / ${fmt(r.inset)} mm`),
+      gain ? chip('trending-up', t('layout.gain', gain), '', 'gain') : '',
+    ].join('')
   }
 
   // ------------------------------------------------------------ stage (the sheet on the mat)
@@ -273,7 +371,22 @@
     const n = sheetCount()
     $('#pager').hidden = n < 2
     $('#sheetNo').textContent = `${st.sheet + 1} / ${n}`
-    $('#stageMeta').textContent = `${label(L.paper)} ${L.orientation} · ${fmt(L.cardW)} × ${fmt(L.cardH)} mm · ${L.slots.length}/sheet`
+    renderFacts()
+  }
+
+  // borderless only matters when it fits more cards; null when off or no gain
+  function gainCount() {
+    const L = st.layout, from = st.normalCount
+    return st.settings.borderless && L && from && L.slots.length > from ? { from, n: L.slots.length } : null
+  }
+
+  function renderBorderless() {
+    const L = st.layout, on = st.settings.borderless && L, gain = gainCount()
+    const inset = L ? fmt(L.registration.inset) : ''
+    $('#borderlessHint').textContent = on && gain ? t('layout.borderlessOn', { inset, ...gain }) : t('layout.borderlessHint')
+    $('#borderlessNote').hidden = !on
+    if (on) $('#borderlessText').innerHTML = t('layout.borderlessNote', { inset })
+    $('#cornersFrom').hidden = !(st.settings.cornersFrom && st.settings.extendCorners)
   }
 
   function traceCuts() {
@@ -363,12 +476,13 @@
     const box = $('#impOptions')
     box.textContent = ''
     if (!p.options.length) box.innerHTML = `<p class="hint">${t('imp.noOptions')}</p>`
+    $('#impOptSub').textContent = p.options.length ? t('imp.optCount', { n: p.options.length }) : t('imp.noOptions')
     for (const o of p.options) {
       const id = 'impOpt-' + o.name
       const wrap = document.createElement(o.kind === 'flag' ? 'label' : 'div')
       if (o.kind === 'flag') {
-        wrap.className = 'check'
-        wrap.innerHTML = `<input type="checkbox" id="${id}"> <span></span>`
+        wrap.className = 'switch-line opt-flag'
+        wrap.innerHTML = `<span></span><input type="checkbox" id="${id}" role="switch" class="switch">`
         wrap.querySelector('span').textContent = o.flag
       } else {
         wrap.className = 'field'
@@ -551,7 +665,15 @@
     let r
     try { r = await post(`api/decks/${imp.deck.id}/use`, { job: st.job.id, mode }) } catch (e) { toast(e.message); return }
     st.job = r
-    toast(t('imp.added', { n: r.added }))
+    // Scryfall images have rounded corners and no bleed: fill the corners unless the user already chose a value
+    const corners = imp.deck.plugin === 'mtg' && !st.settings.extendCorners
+    if (corners) {
+      st.settings.extendCorners = '3.5mm'
+      st.settings.cornersFrom = 'mtg'
+      store.set('settings', st.settings)
+      $('#extendCorners').value = st.settings.extendCorners
+    }
+    toast(t('imp.added', { n: r.added }) + (corners ? ' · ' + t('imp.cornersOn') : ''))
     loadHistory()
     showWs('create')
     go('cards')
@@ -587,13 +709,19 @@
     const list = await api(`api/templates?paper=${sel.value}`)
     const ul = $('#tplList')
     ul.textContent = ''
-    for (const x of list) {
+    $('#tplCount').textContent = t('mach.files', { n: list.length })
+    // file rows as in the design; the size in use comes first and is highlighted
+    const isCur = (x) => sel.value === st.settings.paper && x.card === st.settings.card && x.borderless === !!st.settings.borderless
+    for (const x of [...list.filter(isCur), ...list.filter((x) => !isCur(x))]) {
       const li = document.createElement('li')
-      const cur = sel.value === st.settings.paper && x.card === st.settings.card && x.borderless === !!st.settings.borderless
-      li.innerHTML = `<span class="${cur ? 'cur' : ''}">${cur ? '★ ' : ''}${esc(label(x.card))}${x.borderless ? ' · ' + t('mach.borderless') : ''}<br><code>${esc(x.name)}.studio3</code></span><a download></a>`
-      const a = li.querySelector('a')
-      a.href = `api/template/${x.name}?borderless=${x.borderless ? 1 : 0}`
-      a.textContent = '⬇ .studio3'
+      const cur = isCur(x)
+      const c = st.opts.cards[x.card]
+      li.className = 'file' + (cur ? ' rec' : '')
+      li.innerHTML = `<span class="fi">${icon('file-down')}</span>
+        <span class="tx"><span class="t">${esc(label(x.card))}${c ? ` <small>${fmt(c.w)} × ${fmt(c.h)}</small>` : ''}${x.borderless ? ` <span class="pill">${t('mach.borderless')}</span>` : ''}${cur ? ` <span class="pill ref">${t('mach.inUse')}</span>` : ''}</span>
+        <code>${esc(x.name)}.studio3</code></span>
+        <a class="btn sm ${cur ? 'cut' : 'ghost'}" download aria-label="${t('mach.download')} ${esc(x.name)}.studio3">${icon('download')}</a>`
+      li.querySelector('a').href = `api/template/${x.name}?borderless=${x.borderless ? 1 : 0}`
       ul.append(li)
     }
   }
@@ -605,7 +733,7 @@
     const s = st.settings
     const body = {
       paper: s.paper, card: s.card, borderless: s.borderless, registration: s.registration, fit: s.fit,
-      extendBleed: s.extendBleed.trim(), crop: s.crop.trim(), specialty: s.specialty,
+      extendBleed: s.extendBleed.trim(), extendCorners: s.extendCorners.trim(), extendEdges: s.extendEdges.trim(), crop: s.crop.trim(), specialty: s.specialty,
       onlyFronts: $('#onlyFronts').checked, label: $('#label').value.trim(),
       showOutline: $('#showOutline').checked, useOffset: $('#useOffset').checked,
     }
@@ -628,10 +756,14 @@
     const status = $('#makeStatus')
     const btn = $('#generate')
     btn.disabled = s.state === 'running'
+    // result banner (design: green "made in 2.2 s" with the page count)
     status.className = 'status ' + s.state
-    status.textContent = s.state === 'running' ? t('make.running')
-      : s.state === 'done' ? t('make.done', { s: s.took, n: st.job.pages.length })
-      : s.state === 'error' ? s.error : ''
+    status.hidden = !['running', 'done', 'error'].includes(s.state)
+    $('#makeStatusT').textContent = s.state === 'running' ? t('make.running')
+      : s.state === 'done' ? t('make.doneT', { s: s.took }) : s.state === 'error' ? t('make.errorT') : ''
+    $('#makeStatusS').textContent = s.state === 'done' ? t('make.doneS', { n: st.job.pages.length })
+      : s.state === 'error' ? s.error || '' : ''
+    $('#generate span').textContent = t(s.state === 'done' ? 'make.again' : 'make.go')
     const done = st.job.pdf && s.state !== 'running'
     $('#pdfActions').hidden = !done
     const name = `${st.settings.paper}-${st.settings.card}`
@@ -648,10 +780,11 @@
       $('#downloadPng').href = `api/jobs/${st.job.id}/png.zip?${v}`
       $('#downloadStudio').href = `api/jobs/${st.job.id}/studio.zip?${v}`
       $('#pngInfo').textContent = t('make.pngInfo', { n: png.files.length, px: `${f0.px[0]} × ${f0.px[1]}`, dpi: png.ppi, w: f0.mm[0], h: f0.mm[1] })
-      $('#studioInfo').textContent = png.borderless ? t('make.studioBorderless')
+      const pdfOnly = png.pdfOnly ?? png.borderless
+      $('#studioInfo').textContent = pdfOnly ? t(png.matOffset ? 'make.studioPreset' : 'make.studioBorderless')
         : png.templateAvailable ? t('make.studioInfo', { tpl: `${png.template}.studio3`, o: t(png.portrait ? 'make.portrait' : 'make.landscape') })
         : t('make.studioNoTpl')
-      $('#downloadStudio').hidden = !!png.borderless
+      $('#downloadStudio').hidden = !!pdfOnly
     }
     const pages = $('#pages')
     pages.textContent = ''
@@ -664,6 +797,7 @@
         pages.append(fig)
       })
     }
+    if (st.layout) renderFacts()
     $('#logBox').hidden = !s.log
     $('#log').textContent = s.log || ''
   }
@@ -676,6 +810,12 @@
     a.hidden = !ok
     $('#tplMissing').hidden = !!ok
     if (ok) a.href = `api/template/${L.template}?borderless=${st.settings.borderless && !st.settings.specialty ? 1 : 0}`
+    $('#tplName').textContent = ok ? `${L.template}.studio3` : t('cut.tpl')
+    // SRK preset: upstream has no cut file → hand out the DXF to build one in Studio (once)
+    const dxf = $('#downloadPresetDxf')
+    dxf.hidden = !L?.preset
+    if (L?.preset) dxf.href = `api/preset/${st.settings.specialty}.dxf`
+    $('#tplMissing').textContent = L?.preset && !ok ? t('cut.presetTpl', { tpl: `${L.template}.studio3` }) : t('cut.tplMissing')
     $('#measureText').textContent = t('cut.measure', { w: L ? fmt(L.cardW) : '—' })
     $('#downloadCal').href = `api/calibration/${st.settings.paper}`
 
@@ -685,10 +825,11 @@
     $('#routeHint').textContent = t(route === 'studio' ? 'route.studioHint' : 'route.pdfHint')
     const f0 = st.job?.png?.files?.[0]
     const s2 = $('#downloadStudio2')
-    const borderless = !!st.job?.png?.borderless
+    const png = st.job?.png
+    const borderless = !!(png?.pdfOnly ?? png?.borderless)
     s2.hidden = !f0 || borderless
     $('#studioMissing').hidden = !!f0 && !borderless
-    $('#studioMissing').textContent = t(borderless ? 'make.studioBorderless' : 'cutS.missing')
+    $('#studioMissing').textContent = t(!borderless ? 'cutS.missing' : png?.matOffset ? 'make.studioPreset' : 'make.studioBorderless')
     // marks-only sheet: re-feed a front printed without marks; measure the first card's art edge first
     const S = st.settings
     const q = new URLSearchParams({ paper: S.paper, card: S.card, borderless: S.borderless && !S.specialty ? 1 : 0,
@@ -698,11 +839,16 @@
       const s0 = L.slots.reduce((a, b) => (b.y < a.y || (b.y === a.y && b.x < a.x) ? b : a))
       const [bx, by] = L.bleed || [0, 0]
       $('[data-i18n="marks.lead"]').textContent = t('marks.lead', { x: fmt(s0.x - bx), y: fmt(s0.y - by) })
-      const nm = `${L.paper}-${S.card}${S.borderless && !S.specialty ? '-borderless' : ''}-marks-${S.registration}`
+      const nm = `${L.preset ? S.specialty : `${L.paper}-${S.card}${S.borderless && !S.specialty ? '-borderless' : ''}`}-marks-${S.registration}`
       $('#marksInfo').textContent = t('marks.info', { name: nm })
     }
     // borderless cut files declare a page 13 mm larger than the paper → the sheet sits 6.5 mm in from the grid
-    $('#borderlessMat').hidden = !(st.settings.borderless && !st.settings.specialty)
+    // SRK presets with marks under 10 mm use the same trick with their own offset
+    const mat = $('#borderlessMat')
+    mat.hidden = !((st.settings.borderless && !st.settings.specialty) || L?.matOffset)
+    $('#borderlessMatText').textContent = L?.matOffset
+      ? t('cut.presetMat', { o: fmt(L.matOffset), w: Math.round(L.pageW + 2 * L.matOffset), h: Math.round(L.pageH + 2 * L.matOffset), inset: fmt(L.registration.inset) })
+      : t('cut.borderlessMat')
     if (f0) s2.href = `api/jobs/${st.job.id}/studio.zip?v=${st.job.status.took}`
     $('#placeText').textContent = t('cutS.place', { w: f0 ? (f0.studioMm || f0.mm)[0] : '—', h: f0 ? (f0.studioMm || f0.mm)[1] : '—' })
   }
@@ -711,8 +857,13 @@
     const o = await api('api/offset')
     $('#offX').value = o.x; $('#offY').value = o.y; $('#offA').value = o.angle
     $('#offEnabled').checked = !!o.enabled
-    $('#offsetNow').textContent = o.enabled ? `(x ${o.x}, y ${o.y}, ${o.angle}°)` : ''
-    $('#useOffset').disabled = !o.enabled
+    $('#offsetNow').textContent = o.enabled ? `X ${o.x} · Y ${o.y} · ${o.angle}°` : t('make.offsetOff')
+    // no saved offset → the switch reads off and is locked; it comes back on once an offset is saved
+    const u = $('#useOffset')
+    if (!o.enabled) u.checked = false
+    else if (u.disabled) u.checked = true
+    u.disabled = !o.enabled
+    $('#calState').hidden = !o.enabled
   }
 
   async function saveOffset() {
@@ -725,7 +876,9 @@
   function renderAll() {
     if (!st.job || !st.opts) return
     renderCards()
-    renderFacts()
+    renderPaperTiles()
+    renderTiles()
+    renderBorderless()
     renderStage()
     renderMake()
     renderCut()
@@ -733,12 +886,13 @@
     if (plugins) { renderGames(); renderPlugin() }
     $('[data-bind=cardsCount]').textContent = st.job.front.length ? String(st.job.front.length) : ''
     $('[data-bind=cardsCountStep]').textContent = st.job.front.length ? String(st.job.front.length) : ''
-    $('[data-bind=layoutName]').textContent = st.layout ? `${label(st.settings.card)} · ${label(st.settings.paper)}` : ''
+    $('[data-bind=layoutName]').textContent = st.layout ? `${label(st.settings.card)} · ${label(st.settings.paper)}${st.settings.borderless ? ' · ' + t('layout.borderlessShort') : ''}` : ''
     $('[data-bind=makeState]').textContent = st.job.pdf ? 'PDF' : ''
   }
 
   // ------------------------------------------------------------ boot
   async function boot() {
+    fillIcons()
     $$('[data-lang]').forEach((b) => b.addEventListener('click', () => { st.lang = b.dataset.lang; store.set('lang', st.lang); applyLang() }))
     $$('[data-step]').forEach((b) => b.addEventListener('click', () => go(b.dataset.step)))
     $('#fileFront').addEventListener('change', (e) => { upload('front', [...e.target.files]); e.target.value = '' })
@@ -751,7 +905,12 @@
       st.job = await api(`api/jobs/${st.job.id}`)
       renderAll()
     })
-    ;['paper', 'card', 'borderless', 'registration', 'fit', 'extendBleed', 'crop', 'specialty'].forEach((id) => $('#' + id).addEventListener('change', onSetting))
+    ;['paper', 'card', 'borderless', 'registration', 'fit', 'extendBleed', 'extendCorners', 'extendEdges', 'crop', 'specialty'].forEach((id) => $('#' + id).addEventListener('change', onSetting))
+    $('[data-pane=layout]').addEventListener('click', (e) => {
+      const b = e.target.closest('button[data-set]')
+      if (b) setNative(b.dataset.set, b.dataset.val)
+    })
+    $$('[data-next]').forEach((b) => b.addEventListener('click', () => go(b.dataset.next)))
     $('#generate').addEventListener('click', generate)
     $$('[data-ws]').forEach((b) => b.addEventListener('click', () => showWs(b.dataset.ws)))
     $$('[data-goto]').forEach((b) => b.addEventListener('click', () => showWs(b.dataset.goto)))
