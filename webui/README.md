@@ -144,4 +144,4 @@ venv\Scripts\python -c "import sys; sys.path.insert(0,'webui'); import scm_bridg
 แบบ desktop 1440 ทั้ง 8 หน้า (3 workspace) อยู่ใน repo SRK-CARD-Studio — ตอนนี้นำมาใช้แล้วเฉพาะโครง 3 workspace, หน้านำเข้าเด็ค/ประวัติ และหน้าตั้งค่าเครื่อง (ขั้น ①–④ ยังใช้แผงฟอร์มเดิม):
 - ขั้นตอนทำงาน, ลิงก์ Figma/Stitch, เครื่องมือ: `D:\SalmonRK\Card\docs\SCM-REDESIGN.md` · จัดหมวดฟีเจอร์: `docs/SCM-FEATURES.md`
 - ข้อมูลที่หน้าจอต้องตรง (ดึงจาก `static/i18n.js` + `/api/options`): `docs/SCM-INFO-SPEC.md` — ถ้าแก้ข้อความ/ตัวเลือกในเว็บ ให้แก้ spec ด้วย
-- HTML ต้นแบบ: `design/scm/web/` · Figma page "SCM · Desktop 1440"
+- HTML ต้นแบบ: `design/scm/web/` · Figma page "SCM · Desktop 1440" (8 หน้าจอ) และ "SCM · Foundations" (สี Light/Dark ตรงกับตัวแปรใน `static/app.css`, ตัวอักษร, ไอคอน) — ถ้าแก้สีใน `app.css` ให้แก้ variable ใน Figma ด้วย
