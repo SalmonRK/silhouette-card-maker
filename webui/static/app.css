@@ -571,3 +571,30 @@ input.switch:disabled { opacity: .45; cursor: not-allowed; }
 .imp-panel .tile-more #impOptions { margin-top: 4px; }
 .opt-flag { flex-wrap: wrap; padding: 10px 0 0; font: 500 13px var(--mono); }
 .imp-panel .opt-flag .opt-help { flex-basis: 100%; margin: 0; font-family: var(--body); }
+
+/* card library: owner / deck name, filters, the card list (catalog.py) */
+.field.two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.field.two input { width: 100%; box-sizing: border-box; }
+.deck-id { margin: 10px 0 4px; }
+.deck-id .hint { margin: 4px 0 0; font-size: 12px; overflow-wrap: anywhere; }
+.lib-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.lib-tools .select-wrap { min-width: 140px; }
+.lib-tools .search { width: 200px; }
+.lib-tools .btn { display: inline-flex; gap: 6px; align-items: center; }
+.hist .ow { color: var(--ink-soft); }
+.cardlist { overflow: auto; border-radius: 14px; background: var(--paper); color: #15201d; box-shadow: 0 1px 4px rgb(21 32 29 / .06); }
+.ctab { width: 100%; border-collapse: collapse; font-size: 13px; }
+.ctab th { position: sticky; top: 0; z-index: 1; background: var(--paper); text-align: left; font: 600 12px/1.2 var(--display); color: #4b5a55; padding: 10px 8px; border-bottom: 1px solid #d5dcd9; white-space: nowrap; }
+.ctab td { padding: 6px 8px; border-bottom: 1px solid #e6ebe9; vertical-align: top; }
+.ctab td small { display: block; color: #4b5a55; font-size: 11.5px; }
+.ctab td small.tx { max-width: 360px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.ctab img { width: 40px; aspect-ratio: 63 / 88; object-fit: cover; border-radius: 4px; display: block; background: #d5dcd9; }
+.ctab .cn { display: flex; gap: 6px; align-items: center; }
+.ctab .cn .abbr { font-size: 9.5px; padding: 2px 4px; }
+.ctab .num { text-align: right; font-variant-numeric: tabular-nums; }
+.ctab .st { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.ctab tr.nodata td { color: #7a4a00; }
+@media (max-width: 760px) {
+  .field.two { grid-template-columns: 1fr; }
+  .lib-tools .search { width: 100%; }
+}

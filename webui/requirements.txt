@@ -1,2 +1,4 @@
 # on top of the repo's requirements.txt
 flask>=3.0
+requests-cache>=1.2   # card library: nothing is downloaded twice
+openpyxl>=3.1         # card library: การ์ดทั้งหมด.xlsx

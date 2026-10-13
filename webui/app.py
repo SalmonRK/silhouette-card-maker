@@ -24,13 +24,14 @@ from pathlib import Path
 
 from flask import Flask, abort, jsonify, request, send_file, send_from_directory
 
+import catalog
 import fetch_bridge
 import scm_bridge as scm
 
 HERE = Path(__file__).resolve().parent
 JOBS = HERE / "jobs"
 DATA = HERE / "data"
-DECKS = DATA / "decks"
+DECKS = DATA / "library" / "decks"
 STATIC = HERE / "static"
 IMAGE_EXT = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tif", ".tiff"}
 KINDS = {"front": "front", "back": "back", "ds": "double_sided"}
@@ -323,18 +324,68 @@ def api_templates():
 
 
 # ---------------------------------------------------------------- deck library (decklist import + history)
-# A fetch never writes into a job: the plugin fills webui/data/decks/<id>/ first, the user checks the result, and
-# "use" copies the images into a job. The folder stays as history, so the same deck can be reused without
-# downloading it again.
+# A fetch never writes into a job: the plugin fills a deck folder in the library first, the user checks the result,
+# and "use" copies the images into a job. The folder stays as history, so the same deck can be reused without
+# downloading it again. Deck folders are filed by game and owner:
+#     data/library/decks/<game>/<owner>/<YYYY-MM-DD> <deck name> [<id>]/{front,double_sided,raw,decklist}
+# and every finished fetch is added to the card catalog (catalog.py) and to การ์ดทั้งหมด.xlsx.
 
 WARN_RE = re.compile(r"(error|not found|couldn't|could not|unable|failed|no card|skipp)", re.I)
+NO_OWNER = "ไม่ระบุเจ้าของ"
+_deck_paths: dict[str, Path] = {}
+
+
+def fs_name(s, n: int = 60) -> str:
+    """Readable folder name (Thai kept); only the characters Windows forbids are dropped."""
+    s = re.sub(r'[<>:"/\\|?*\x00-\x1f\[\]]+', " ", str(s or "")).strip(" .")
+    return re.sub(r"\s+", " ", s)[:n].strip(" .")
+
+
+def deck_folder(meta: dict) -> Path:
+    day = time.strftime("%Y-%m-%d", time.localtime(meta.get("created") or time.time()))
+    name = fs_name(meta.get("name")) or "เด็ค"
+    game = fs_name(meta.get("game")) or meta["plugin"]
+    return DECKS / game / (fs_name(meta.get("owner"), 40) or NO_OWNER) / f"{day} {name} [{meta['id']}]"
+
+
+def find_deck(deck_id: str) -> Path | None:
+    d = _deck_paths.get(deck_id)
+    if d and (d / "deck.json").exists():
+        return d
+    d = next((p.parent for p in DECKS.glob("*/*/*/deck.json") if p.parent.name.endswith(f"[{deck_id}]")), None)
+    if d:
+        _deck_paths[deck_id] = d
+    return d
+
+
+def relocate(d: Path, meta: dict) -> Path:
+    """Move a deck folder to where its game / owner / name say it belongs."""
+    target = deck_folder(meta)
+    if target == d:
+        return d
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.move(str(d), str(target))
+    prune(d)
+    _deck_paths[meta["id"]] = target
+    return target
+
+
+def prune(d: Path) -> None:
+    """Drop the owner / game folders a deck left empty."""
+    for p in (d.parent, d.parent.parent):
+        if p == DECKS or DECKS not in p.parents:
+            break
+        try:
+            p.rmdir()
+        except OSError:
+            break
 
 
 def deck_dir(deck_id: str) -> Path:
     if not re.fullmatch(r"[a-f0-9]{12}", deck_id or ""):
         abort(404)
-    d = DECKS / deck_id
-    if not (d / "deck.json").exists():
+    d = find_deck(deck_id)
+    if not d:
         abort(404)
     return d
 
@@ -352,23 +403,98 @@ def save_deck_meta(d: Path, meta: dict) -> None:
 
 def deck_state(d: Path) -> dict:
     meta = deck_meta(d)
-    live = _decks.get(d.name)
+    live = _decks.get(meta.get("id", ""))
     if live:  # still fetching: status lives in memory until the run thread writes it back
         meta = {**meta, **{k: v for k, v in live.items() if k != "proc"}}
-    elif meta.get("state") == "running":  # server restarted mid-fetch
+    elif meta.get("state") in ("running", "cataloging"):  # server restarted mid-fetch
         meta["state"] = "cancelled"
-    return {**meta, "front": list_files(d / "front"), "ds": list_files(d / "double_sided")}
+    return {**meta, "folder": str(d.relative_to(DATA)), "front": list_files(d / "front"), "ds": list_files(d / "double_sided")}
+
+
+def export_library() -> str | None:
+    """Rewrite การ์ดทั้งหมด.xlsx; a copy still open in Excel is locked, then a dated file is written beside it."""
+    try:
+        return catalog.export_xlsx().name
+    except PermissionError:
+        return catalog.export_xlsx(catalog.EXPORTS / f"การ์ดทั้งหมด {time.strftime('%Y-%m-%d %H%M%S')}.xlsx").name
+    except Exception:
+        traceback.print_exc()
+        return None
+
+
+def catalog_deck(d: Path, meta: dict) -> tuple[Path, dict]:
+    """After a fetch: name the deck from its source if the user left it blank, file it, add its cards to the catalog."""
+    info = catalog.deck_info_from_raw(d)
+    if not meta.get("name") and info.get("name"):
+        meta["name"] = fs_name(info["name"])
+    if info.get("author"):
+        meta["author"] = info["author"]
+    if not meta.get("name"):
+        meta["name"] = f"{meta.get('game')} {time.strftime('%H%M', time.localtime(meta['created']))}"
+    d = relocate(d, meta)
+    try:
+        meta["catalog"] = catalog.ingest(d, meta)
+    except Exception as e:
+        traceback.print_exc()
+        meta["catalog"] = {"error": str(e)}
+    return d, meta
+
+
+def migrate_old_decks() -> None:
+    """Decks fetched before the library existed sit in data/decks/<id>: file them and add them to the catalog."""
+    old = DATA / "decks"
+    if not old.exists():
+        return
+    moved = 0
+    for f in list(old.glob("*/deck.json")):
+        d = f.parent
+        meta = deck_meta(d)
+        if not meta.get("id"):
+            continue
+        meta.setdefault("owner", "")
+        if meta.get("state") == "running":
+            meta["state"] = "cancelled"
+        if meta.get("state") == "done" and not list_files(d / "front"):
+            meta["state"] = "empty"
+        if not meta.get("name"):
+            meta["name"] = f"{meta.get('game')} {time.strftime('%H%M', time.localtime(meta.get('created') or 0))}"
+        d = relocate(d, meta)
+        if meta.get("state") == "done":
+            try:
+                meta["catalog"] = catalog.ingest(d, meta)
+            except Exception:
+                traceback.print_exc()
+        save_deck_meta(d, meta)
+        moved += 1
+    try:
+        old.rmdir()
+    except OSError:
+        pass
+    if moved:
+        print(f"Moved {moved} deck(s) into {DECKS}")
+        export_library()
+
+
+def _opts(o) -> dict:
+    return {k: v for k, v in (o or {}).items() if v not in (None, "", False, [])}
+
+
+def same_request(meta: dict, b: dict) -> bool:
+    return (meta.get("plugin") == b.get("plugin") and meta.get("format") == b.get("format")
+            and (meta.get("deck") or "").strip() == str(b.get("deck") or "").strip()
+            and _opts(meta.get("options")) == _opts(b.get("options")))
 
 
 @app.get("/api/decks")
 def api_decks():
     out = []
-    for d in DECKS.glob("*/deck.json"):
-        s = deck_state(d.parent)
+    for f in DECKS.glob("*/*/*/deck.json"):
+        s = deck_state(f.parent)
         s.pop("log", None)
         s["count"] = len(s.pop("front"))
         s["dsCount"] = len(s.pop("ds"))
-        s["cover"] = next((f["name"] for f in list_files(d.parent / "front")), None)
+        s["cover"] = next((x["name"] for x in list_files(f.parent / "front")), None)
+        _deck_paths[s.get("id", "")] = f.parent
         out.append(s)
     return jsonify(sorted(out, key=lambda m: m.get("created", 0), reverse=True))
 
@@ -376,22 +502,33 @@ def api_decks():
 @app.post("/api/decks/fetch")
 def api_deck_fetch():
     b = request.get_json(force=True) or {}
-    if any(v.get("state") == "running" for v in _decks.values()):
+    if _decks:
         return jsonify({"error": "busy"}), 409  # plugins hit public APIs; one deck at a time is kinder to them
+    if not b.get("force"):  # the same list fetched before: open that deck instead of downloading it again
+        for f in DECKS.glob("*/*/*/deck.json"):
+            m = deck_meta(f.parent)
+            if m.get("state") == "done" and same_request(m, b):
+                return jsonify({**deck_state(f.parent), "reused": True})
+    plugin_id = str(b.get("plugin", ""))
+    p = next((x for x in fetch_bridge.plugins() if x["id"] == plugin_id and not x.get("error")), None)
+    if not p:
+        return jsonify({"error": "unknown-plugin"}), 400
     deck_id = uuid.uuid4().hex[:12]
-    d = DECKS / deck_id
+    meta = {"id": deck_id, "plugin": plugin_id, "game": p["name"], "format": str(b.get("format", "")),
+            "deck": str(b.get("deck", "")).strip(), "options": b.get("options") or {},
+            "owner": fs_name(b.get("owner"), 40), "name": fs_name(b.get("name"), 60), "author": None,
+            "created": time.time(), "state": "running"}
+    d = deck_folder(meta)
     for sub in ("front", "double_sided"):
         (d / sub).mkdir(parents=True, exist_ok=True)
-    plugin_id = str(b.get("plugin", ""))
     try:
-        argv = fetch_bridge.build_args(d, plugin_id, str(b.get("format", "")), str(b.get("deck", "")), b.get("options") or {})
+        argv = fetch_bridge.build_args(d, plugin_id, meta["format"], meta["deck"], meta["options"])
     except ValueError as e:
         shutil.rmtree(d, ignore_errors=True)
+        prune(d)
         return jsonify({"error": str(e)}), 400
-    p = next(x for x in fetch_bridge.plugins() if x["id"] == plugin_id)
-    meta = {"id": deck_id, "plugin": plugin_id, "game": p["name"], "format": b["format"], "deck": str(b["deck"]).strip(),
-            "options": b.get("options") or {}, "created": time.time(), "state": "running"}
     save_deck_meta(d, meta)
+    _deck_paths[deck_id] = d
     live = _decks[deck_id] = {"state": "running", "log": [], "started": time.time()}
 
     def line(s):
@@ -399,17 +536,29 @@ def api_deck_fetch():
             live["log"] = (live["log"] + [s])[-400:]
 
     def run():
+        dd = d
         try:
-            code = fetch_bridge.run(d, plugin_id, argv, lambda pr: live.__setitem__("proc", pr), line)
+            code = fetch_bridge.run(dd, plugin_id, argv, lambda pr: live.__setitem__("proc", pr), line)
             state = "cancelled" if live.get("cancel") else "done" if code == 0 else "error"
+            if state == "done" and not list_files(dd / "front"):
+                state = "empty"  # the plugin ended fine but nothing matched: usually the wrong format for this list
             live.update(state=state, code=code)
         except Exception as e:
             live.update(state="error", error=str(e))
         live.pop("proc", None)
-        warnings = [s for s in live["log"] if WARN_RE.search(s)][:50]
-        (d / "log.txt").write_text("\n".join(live["log"]), encoding="utf-8")
-        save_deck_meta(d, {**meta, "state": live["state"], "code": live.get("code"), "error": live.get("error"),
-                           "took": round(time.time() - live["started"], 1), "warnings": warnings})
+        (dd / "log.txt").write_text("\n".join(live["log"]), encoding="utf-8")
+        try:
+            http = json.loads((dd / "raw" / "_stats.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            http = {}
+        m = {**meta, "state": live["state"], "code": live.get("code"), "error": live.get("error"),
+             "took": round(time.time() - live["started"], 1), "http": http,
+             "warnings": [s for s in live["log"] if WARN_RE.search(s)][:50]}
+        if m["state"] == "done":
+            live["state"] = "cataloging"
+            dd, m = catalog_deck(dd, m)
+            m["xlsx"] = export_library()
+        save_deck_meta(dd, m)
         _decks.pop(deck_id, None)
 
     threading.Thread(target=run, daemon=True).start()
@@ -428,6 +577,26 @@ def api_deck(deck_id):
     return jsonify(s)
 
 
+@app.patch("/api/decks/<deck_id>")
+def api_deck_rename(deck_id):
+    """Change owner / deck name: the folder moves, and the catalog and the Excel file follow."""
+    d = deck_dir(deck_id)
+    if deck_id in _decks:
+        return jsonify({"error": "busy"}), 409
+    b = request.get_json(force=True) or {}
+    meta = deck_meta(d)
+    if "owner" in b:
+        meta["owner"] = fs_name(b["owner"], 40)
+    if "name" in b:
+        meta["name"] = fs_name(b["name"], 60) or meta.get("name") or "เด็ค"
+    d = relocate(d, meta)
+    save_deck_meta(d, meta)
+    if meta.get("state") == "done":
+        catalog.update_deck(d, meta)
+        export_library()
+    return jsonify(deck_state(d))
+
+
 @app.post("/api/decks/<deck_id>/cancel")
 def api_deck_cancel(deck_id):
     d = deck_dir(deck_id)
@@ -444,6 +613,10 @@ def api_deck_delete(deck_id):
     if deck_id in _decks:
         return jsonify({"error": "busy"}), 409
     shutil.rmtree(d, ignore_errors=True)
+    prune(d)
+    _deck_paths.pop(deck_id, None)
+    catalog.forget_deck(deck_id)
+    export_library()
     return jsonify({"ok": True})
 
 
@@ -456,6 +629,50 @@ def api_deck_img(deck_id, kind, name):
     if not p.exists():
         abort(404)
     return send_file(p, max_age=3600)
+
+
+# ---------------------------------------------------------------- card catalog (catalog.py)
+
+@app.get("/api/library/cards")
+def api_library_cards():
+    a = request.args
+    return jsonify(catalog.cards(a.get("game", ""), a.get("q", "").strip(), a.get("owner", "")))
+
+
+@app.get("/api/library/owners")
+def api_library_owners():
+    return jsonify(catalog.owners())
+
+
+@app.get("/api/library/img/<path:rel>")
+def api_library_img(rel):
+    p = (catalog.LIB / rel).resolve()
+    if catalog.IMAGES.resolve() not in p.parents or not p.exists():
+        abort(404)
+    return send_file(p, max_age=3600)
+
+
+@app.get("/api/library/xlsx")
+def api_library_xlsx():
+    name = export_library()
+    if not name:
+        return jsonify({"error": "export-failed"}), 500
+    return send_file(catalog.EXPORTS / name, as_attachment=True, download_name=catalog.XLSX_NAME, max_age=0)
+
+
+@app.post("/api/library/rebuild")
+def api_library_rebuild():
+    """Read every finished deck again (after catalog.py learned a new source); nothing is downloaded twice."""
+    if _decks:
+        return jsonify({"error": "busy"}), 409
+    n = 0
+    for f in DECKS.glob("*/*/*/deck.json"):
+        meta = deck_meta(f.parent)
+        if meta.get("state") == "done" and list_files(f.parent / "front"):
+            meta["catalog"] = catalog.ingest(f.parent, meta)
+            save_deck_meta(f.parent, meta)
+            n += 1
+    return jsonify({"decks": n, "xlsx": export_library()})
 
 
 @app.post("/api/decks/<deck_id>/use")
@@ -597,6 +814,7 @@ def is_scm_studio(port: int) -> bool:
 
 
 if __name__ == "__main__":
+    migrate_old_decks()
     port = int(os.environ.get("SCM_WEBUI_PORT", "5190"))
     open_browser = os.environ.get("NO_BROWSER") != "1"
     if port_in_use(port):

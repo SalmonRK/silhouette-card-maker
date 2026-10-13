@@ -427,7 +427,8 @@
 
   let plugins = null
   let impPoll
-  const imp = { game: store.get('impGame', 'mtg'), view: 'pick', deck: null, history: [] }
+  const imp = { game: store.get('impGame', 'mtg'), view: 'pick', deck: null, history: [], cards: [], owners: [] }
+  const patch = (p, data) => api(p, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(data ?? {}) })
   const plugin = () => plugins?.find((p) => p.id === imp.game)
 
   async function openImport() {
@@ -435,11 +436,32 @@
       plugins = (await api('api/plugins')).filter((p) => !p.error)
         .sort((a, b) => (ORDER.indexOf(a.id) + 1 || 99) - (ORDER.indexOf(b.id) + 1 || 99))
       if (!plugin()) imp.game = plugins[0]?.id
+      $('#impOwner').value = store.get('impOwner', '')
       renderGames()
       renderPlugin()
     }
-    await loadHistory()
+    await Promise.all([loadHistory(), loadOwners()])
     renderImport()
+  }
+
+  async function loadOwners() {
+    imp.owners = await api('api/library/owners')
+    $('#ownerList').innerHTML = imp.owners.map((o) => `<option value="${esc(o)}">`).join('')
+    fillLibFilters()
+  }
+
+  // game / owner filters shared by the history and the card list
+  function fillLibFilters() {
+    const g = $('#libGame')
+    const o = $('#libOwner')
+    const gv = g.value
+    const ov = o.value
+    const games = [...new Set(imp.history.map((h) => h.plugin))]
+    g.innerHTML = `<option value="">${esc(t('lib.allGames'))}</option>` + games.map((id) => `<option value="${esc(id)}">${esc(plugins?.find((p) => p.id === id)?.name || id)}</option>`).join('')
+    const owners = [...new Set([...imp.owners, ...imp.history.map((h) => h.owner || '')])]
+    o.innerHTML = `<option value="">${esc(t('lib.allOwners'))}</option>` + owners.map((x) => `<option value="${esc(x || '-')}">${esc(x || t('lib.noOwner'))}</option>`).join('')
+    if ([...g.options].some((x) => x.value === gv)) g.value = gv
+    if ([...o.options].some((x) => x.value === ov)) o.value = ov
   }
 
   function renderGames() {
@@ -532,11 +554,37 @@
     const p = plugin()
     if (!p) return
     store.set('impFormat', { ...store.get('impFormat', {}), [p.id]: $('#impFormat').value })
+    store.set('impOwner', $('#impOwner').value.trim())
+    await fetchDeck({ plugin: p.id, format: $('#impFormat').value, deck: $('#impDeck').value, options: impOptions(),
+      owner: $('#impOwner').value.trim(), name: $('#impName').value.trim() })
+  }
+
+  async function fetchDeck(body) {
     try {
-      imp.deck = await post('api/decks/fetch', { plugin: p.id, format: $('#impFormat').value, deck: $('#impDeck').value, options: impOptions() })
+      imp.deck = await post('api/decks/fetch', body)
     } catch (e) { toast(t('import.err.' + e.message) !== 'import.err.' + e.message ? t('import.err.' + e.message) : e.message); return }
+    $('#impName').value = ''
     setView('deck')
-    watchDeck()
+    if (imp.deck.reused) toast(t('imp.reused'))
+    else watchDeck()
+  }
+
+  // the same list again, downloading what changed (the HTTP cache still answers for what did not)
+  function refetch() {
+    const d = imp.deck
+    if (d) fetchDeck({ plugin: d.plugin, format: d.format, deck: d.deck, options: d.options, owner: d.owner, name: d.name, force: true })
+  }
+
+  async function renameDeck() {
+    const d = imp.deck
+    if (!d || d.state === 'running' || d.state === 'cataloging') return
+    const owner = $('#resOwner').value.trim()
+    const name = $('#resName').value.trim()
+    if (owner === (d.owner || '') && name === (d.name || '')) return
+    try { imp.deck = await patch(`api/decks/${d.id}`, { owner, name }) } catch (e) { toast(e.message); return }
+    toast(t('lib.saved'))
+    await Promise.all([loadHistory(), loadOwners()])
+    renderImport()
   }
 
   async function openDeck(id) {
@@ -549,7 +597,7 @@
     clearInterval(impPoll)
     impPoll = setInterval(async () => {
       imp.deck = await api(`api/decks/${imp.deck.id}`)
-      if (imp.deck.state !== 'running') { clearInterval(impPoll); loadHistory() }
+      if (imp.deck.state !== 'running' && imp.deck.state !== 'cataloging') { clearInterval(impPoll); loadHistory(); loadOwners() }
       renderImport()
     }, 1200)
   }
@@ -557,7 +605,40 @@
   async function loadHistory() {
     imp.history = await api('api/decks')
     $('#histCount').textContent = imp.history.length ? `(${imp.history.length})` : ''
+    fillLibFilters()
     if (imp.view === 'history') renderHistory()
+  }
+
+  // ------------------------------------------------------------ card catalog (every card of every fetched deck)
+  let cardsReq = 0
+  async function loadCards() {
+    const o = $('#libOwner').value
+    const q = new URLSearchParams({ game: $('#libGame').value, owner: o, q: $('#libSearch').value.trim() })
+    const n = ++cardsReq
+    const rows = await api('api/library/cards?' + q)
+    if (n !== cardsReq) return
+    imp.cards = rows
+    renderCardList()
+  }
+
+  function renderCardList() {
+    const box = $('#view-cards')
+    $('#cardCount').textContent = imp.cards.length ? `(${imp.cards.length})` : ''
+    if (!imp.cards.length) {
+      box.innerHTML = `<p class="empty">${t($('#libSearch').value || $('#libGame').value || $('#libOwner').value ? 'lib.none' : 'lib.empty')}</p>`
+      return
+    }
+    const stat = (c) => [c.cost && `⬡ ${c.cost}`, c.power && `⚔ ${c.power}`, c.defense && `⛨ ${c.defense}`, c.hp && `♥ ${c.hp}`].filter(Boolean).join('  ')
+    const img = (p) => 'api/library/img/' + p.split(/[\/]/).map(encodeURIComponent).join('/')
+    box.innerHTML = `<table class="ctab"><thead><tr><th></th><th>${t('lib.colName')}</th><th>${t('lib.colSet')}</th><th>${t('lib.colRarity')}</th>
+      <th>${t('lib.colType')}</th><th>${t('lib.colStats')}</th><th class="num">${t('lib.colCopies')}</th><th>${t('lib.colDecks')}</th></tr></thead><tbody>${
+      imp.cards.map((c) => `<tr${c.found ? '' : ' class="nodata"'}>
+        <td>${c.image ? `<img loading="lazy" alt="" src="${img(c.image)}">` : ''}</td>
+        <td><div class="cn">${abbr(c.game)}<b>${esc(c.name || '')}</b></div>${c.found ? '' : `<small>${t('lib.noData')}</small>`}${c.text ? `<small class="tx">${esc(c.text.slice(0, 140))}</small>` : ''}</td>
+        <td>${esc([c.set_code, c.number].filter(Boolean).join(' · '))}${c.set_name ? `<small>${esc(c.set_name)}</small>` : ''}</td>
+        <td>${esc(c.rarity || '')}</td><td>${esc(c.type || '')}</td><td class="st">${esc(stat(c))}</td>
+        <td class="num">${c.copies}</td><td><small>${esc((c.used_in || '').split(',').join(' · '))}</small></td></tr>`).join('')
+    }</tbody></table>`
   }
 
   function setView(v) {
@@ -605,23 +686,31 @@
     const box = $('#view-history')
     box.textContent = ''
     if (!imp.history.length) { box.innerHTML = `<p class="empty">${t('imp.historyEmpty')}</p>`; return }
-    for (const h of imp.history) {
+    const g = $('#libGame').value
+    const o = $('#libOwner').value
+    const q = $('#libSearch').value.trim().toLowerCase()
+    const list = imp.history.filter((h) => (!g || h.plugin === g) && (!o || (h.owner || '-') === o)
+      && (!q || `${h.name} ${h.owner} ${h.game} ${h.deck}`.toLowerCase().includes(q)))
+    if (!list.length) { box.innerHTML = `<p class="empty">${t('lib.none')}</p>`; return }
+    for (const h of list) {
       const div = document.createElement('div')
       div.className = 'hist'
       const when = new Date(h.created * 1000).toLocaleString(st.lang === 'th' ? 'th-TH' : 'en-GB', { dateStyle: 'medium', timeStyle: 'short' })
       div.innerHTML = `${h.cover ? '<img alt="" loading="lazy">' : '<span class="ph"></span>'}
         <div class="tx"><div class="t">${abbr(h.plugin)}<span class="gm"></span></div>
-          <div class="s">${t('imp.cards', { n: h.count })} · ${esc(h.format)} · ${when}${h.used ? ' · ' + t('imp.used') : ''}</div>
+          <div class="s ow"></div>
+          <div class="s">${t('imp.cards', { n: h.count })} · ${esc(h.format)} · ${when}${h.used ? ' · ' + t('imp.used') : ''}${h.state === 'empty' ? ' · ' + t('imp.emptyTitle') : ''}</div>
           <div class="s dk"></div></div>
         <div class="acts"><button type="button" class="btn" data-a="open">${t('imp.open')}</button><button type="button" class="btn ghost danger" data-a="del">${t('imp.delete')}</button></div>`
       if (h.cover) div.querySelector('img').src = `api/decks/${h.id}/img/front/${encodeURIComponent(h.cover)}`
-      div.querySelector('.gm').textContent = h.game
+      div.querySelector('.gm').textContent = h.name || h.game
+      div.querySelector('.ow').textContent = `${h.owner || t('lib.noOwner')} · ${h.game}`
       div.querySelector('.dk').textContent = (h.deck || '').split('\n').slice(0, 2).join(' · ')
       div.querySelector('[data-a=open]').addEventListener('click', () => openDeck(h.id))
       div.querySelector('[data-a=del]').addEventListener('click', async () => {
         try { await api(`api/decks/${h.id}`, { method: 'DELETE' }) } catch (e) { toast(e.message); return }
         if (imp.deck?.id === h.id) imp.deck = null
-        await loadHistory()
+        await Promise.all([loadHistory(), loadOwners()])
         renderImport()
       })
       box.append(div)
@@ -635,18 +724,31 @@
     $('#resultTab').hidden = !imp.deck
     $('#view-pick').hidden = v !== 'pick'
     $('#view-history').hidden = v !== 'history'
+    $('#view-cards').hidden = v !== 'cards'
     $('#view-deck').hidden = v !== 'deck'
     $('#gameSearch').hidden = v !== 'pick'
+    $('#libTools').hidden = v !== 'history' && v !== 'cards'
+    $('#libXlsx').hidden = v !== 'cards'
     $('#impForm').hidden = v === 'deck'
     $('#impResult').hidden = v !== 'deck'
     if (v === 'history') renderHistory()
+    if (v === 'cards') loadCards()
     if (v !== 'deck') return
     const d = imp.deck
     renderDeckGrid()
-    const running = d.state === 'running'
-    $('#resTitle').textContent = t(running ? 'imp.fetching' : d.state === 'done' ? 'imp.doneTitle' : d.state === 'cancelled' ? 'imp.cancelledTitle' : 'imp.errorTitle')
-    $('#resSub').textContent = `${d.game} · ${d.format}${d.took ? ' · ' + t('imp.took', { s: d.took }) : ''}${d.error ? ' · ' + d.error : ''}`
-    $('#resProg').className = 'prog ' + d.state
+    const running = d.state === 'running' || d.state === 'cataloging'
+    $('#resTitle').textContent = t({ running: 'imp.fetching', cataloging: 'imp.catalogingTitle', done: 'imp.doneTitle', cancelled: 'imp.cancelledTitle', empty: 'imp.emptyTitle' }[d.state] || 'imp.errorTitle')
+    $('#resSub').textContent = d.state === 'empty' ? t('imp.emptyHint')
+      : `${d.game} · ${d.format}${d.took ? ' · ' + t('imp.took', { s: d.took }) : ''}${d.error ? ' · ' + d.error : ''}`
+    if (document.activeElement !== $('#resOwner')) $('#resOwner').value = d.owner || ''
+    if (document.activeElement !== $('#resName')) $('#resName').value = d.name || ''
+    $('#resOwner').disabled = $('#resName').disabled = running
+    $('#resFolder').textContent = d.folder ? t('lib.folder', { f: d.folder }) : ''
+    const c = d.catalog
+    $('#resCatalog').textContent = [c && c.kinds != null ? t('lib.catalog', { found: c.found, kinds: c.kinds }) : '',
+      d.http?.requests ? t('lib.http', { c: d.http.cached, n: d.http.requests }) : ''].filter(Boolean).join(' · ')
+    $('#impRefetch').hidden = running
+    $('#resProg').className = 'prog ' + ({ cataloging: 'running', empty: 'cancelled' }[d.state] || d.state)
     $('#stCards').textContent = d.front.length
     $('#stKinds').textContent = groupCards(d.front).length
     $('#stDs').textContent = d.ds.length
@@ -922,6 +1024,16 @@
     $('#impUse').addEventListener('click', useDeck)
     $('#impEdit').addEventListener('click', editDeck)
     $('#impCancel').addEventListener('click', async () => { imp.deck = await post(`api/decks/${imp.deck.id}/cancel`); renderImport() })
+    $('#impRefetch').addEventListener('click', refetch)
+    ;['#resOwner', '#resName'].forEach((id) => {
+      $(id).addEventListener('change', renameDeck)
+      $(id).addEventListener('keydown', (e) => { if (e.key === 'Enter') e.target.blur() })
+    })
+    const libChanged = () => (imp.view === 'cards' ? loadCards() : renderHistory())
+    $('#libGame').addEventListener('change', libChanged)
+    $('#libOwner').addEventListener('change', libChanged)
+    let libTimer
+    $('#libSearch').addEventListener('input', () => { clearTimeout(libTimer); libTimer = setTimeout(libChanged, 200) })
     $('#tplPaper').addEventListener('change', renderMachine)
     $('#saveOffset').addEventListener('click', saveOffset)
     $$('input[name=route]').forEach((r) => r.addEventListener('change', () => { store.set('route', r.value); renderCut() }))

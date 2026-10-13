@@ -22,6 +22,13 @@ if str(REPO) not in sys.path:
 
 _cache: list[dict] | None = None
 
+# formats whose fetch.py uses DECK_PATH as the deck itself (a share link, a deck id or a ydke:// code)
+DIRECT_FORMATS = {
+    "url", "arkhamdb_url", "ashes_share_url", "ashesdb_share_url", "bushiroad_url", "astrabuilder_url", "elestrals",
+    "master_vault_url", "decks_of_keyforge_url", "ringsdb_url", "ringsdb_fellowship_url", "ringsdb_scenario_url",
+    "hallofbeorn_url", "curiosa_url", "ydke",
+}
+
 
 def _title(plugin_dir: Path) -> str:
     try:
@@ -61,6 +68,7 @@ def plugins() -> list[dict]:
                 "id": d.name,
                 "name": _title(d),
                 "formats": list(fmt.type.choices),
+                "direct": [f for f in fmt.type.choices if f in DIRECT_FORMATS],
                 "options": [_describe(p) for p in cli.params if isinstance(p, click.Option) and p.name != "help"],
             })
         _cache = out
@@ -77,9 +85,10 @@ def build_args(job_dir: Path, plugin_id: str, fmt: str, deck: str, opts: dict) -
     deck = deck.strip()
     if not deck:
         raise ValueError("empty-deck")
-    # a share link / ydke:// code is passed as-is (fetch.py treats it as the deck); a pasted list goes via a file
-    if "\n" not in deck and re.match(r"^(https?|ydke)://", deck, re.I):
-        deck_arg = deck
+    # link / code formats: fetch.py takes the deck argument itself (a bare Elestrals deck id is no URL, so decide by
+    # format, not by how the text looks); every other format reads a file
+    if fmt in DIRECT_FORMATS:
+        deck_arg = next(l.strip() for l in deck.splitlines() if l.strip())
     else:
         src = job_dir / "decklist" / "deck.txt"
         src.parent.mkdir(exist_ok=True)

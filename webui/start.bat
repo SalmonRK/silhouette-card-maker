@@ -7,7 +7,7 @@ if not exist venv\Scripts\python.exe (
   python -m venv venv || goto :err
   venv\Scripts\python.exe -m pip install -r requirements.txt -r webui\requirements.txt || goto :err
 )
-venv\Scripts\python.exe -c "import flask" 2>nul || venv\Scripts\python.exe -m pip install -r webui\requirements.txt
+venv\Scripts\python.exe -c "import flask, requests_cache, openpyxl" 2>nul || venv\Scripts\python.exe -m pip install -r webui\requirements.txt
 if not exist webui\static\assets\games\mtg.jpg (
   echo Downloading sample card art for the game picker...
   venv\Scripts\python.exe webui\tools\fetch_game_art.py

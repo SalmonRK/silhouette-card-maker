@@ -298,12 +298,20 @@
       <div class="tabs" role="tablist">
         <button type="button" role="tab" data-view="pick" data-i18n="imp.pick"></button>
         <button type="button" role="tab" data-view="history"><span data-i18n="imp.history"></span> <small id="histCount"></small></button>
+        <button type="button" role="tab" data-view="cards"><span data-i18n="lib.cards"></span> <small id="cardCount"></small></button>
         <button type="button" role="tab" data-view="deck" id="resultTab" hidden data-i18n="imp.result"></button>
       </div>
       <input type="search" id="gameSearch" class="search" data-i18n-ph="imp.search">
+      <div class="lib-tools" id="libTools" hidden>
+        <div class="select-wrap"><select id="libGame" aria-label="Game"></select><i data-icon="chevron-down"></i></div>
+        <div class="select-wrap"><select id="libOwner" aria-label="Owner"></select><i data-icon="chevron-down"></i></div>
+        <input type="search" id="libSearch" class="search" data-i18n-ph="lib.search">
+        <a class="btn ghost" id="libXlsx" href="api/library/xlsx" download><i data-icon="download"></i><span data-i18n="lib.xlsx"></span></a>
+      </div>
     </div>
     <div id="view-pick" class="games" role="radiogroup" aria-label="Games"></div>
     <div id="view-history" class="history" hidden></div>
+    <div id="view-cards" class="cardlist" hidden></div>
     <div id="view-deck" hidden>
       <div class="fetched" id="deckGrid"></div>
       <details class="warnbox" id="warnBox" hidden><summary data-i18n="imp.warnTitle"></summary><ul id="warnList"></ul></details>
@@ -316,6 +324,11 @@
       <h2 data-i18n="ws.import"></h2>
       <p class="lead" data-i18n="imp.lead"></p>
       <div class="game-head" id="gameHead"></div>
+      <div class="field two">
+        <div><label for="impOwner" data-i18n="lib.owner"></label><input id="impOwner" list="ownerList" autocomplete="off" data-i18n-ph="lib.ownerPh"></div>
+        <div><label for="impName" data-i18n="lib.deckName"></label><input id="impName" autocomplete="off" data-i18n-ph="lib.deckNamePh"></div>
+        <datalist id="ownerList"></datalist>
+      </div>
       <div class="field">
         <label for="impFormat" data-i18n="import.format"></label>
         <div class="select-wrap"><select id="impFormat"></select><i data-icon="chevron-down"></i></div>
@@ -342,6 +355,14 @@
       <h2 id="resTitle"></h2>
       <p class="lead" id="resSub"></p>
       <div class="prog" id="resProg"><i></i></div>
+      <div class="deck-id" id="deckId">
+        <div class="field two">
+          <div><label for="resOwner" data-i18n="lib.owner"></label><input id="resOwner" list="ownerList" autocomplete="off"></div>
+          <div><label for="resName" data-i18n="lib.deckName"></label><input id="resName" autocomplete="off"></div>
+        </div>
+        <p class="hint" id="resFolder"></p>
+        <p class="hint" id="resCatalog"></p>
+      </div>
       <div class="stats">
         <div><b id="stCards">0</b><span data-i18n="imp.statCards"></span></div>
         <div><b id="stKinds">0</b><span data-i18n="imp.statKinds"></span></div>
@@ -356,6 +377,7 @@
       <details class="log" id="impLogBox"><summary data-i18n="imp.log"></summary><pre id="impLog"></pre></details>
       <div class="row">
         <button type="button" class="btn ghost" id="impEdit" data-i18n="imp.edit"></button>
+        <button type="button" class="btn ghost" id="impRefetch" data-i18n="lib.refetch" hidden></button>
         <button type="button" class="btn ghost danger" id="impCancel" data-i18n="import.cancel" hidden></button>
       </div>
       <button type="button" class="btn primary" id="impUse"><i data-icon="arrow-right"></i><span data-i18n="imp.use"></span></button>
